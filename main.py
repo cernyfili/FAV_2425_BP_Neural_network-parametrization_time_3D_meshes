@@ -461,22 +461,22 @@ class SurfaceDataList:
             return object_points
 
         # Calculate the bounding box for all objects combined
-        all_points = np.vstack([surface_data.surface_points for surface_data in surface_data_list.list])
+        all_points = np.vstack([surface_data.points_list for surface_data in surface_data_list.list])
         min_corner = np.min(all_points, axis=0)
         shift_vector = min_corner  # Shift all objects to the position of the minimum corner
 
         # Calculate the maximum norm of all points across all axes for each object
         max_norm = max(
-            np.linalg.norm(surface_data_element.surface_points, ord=None, axis=None).max() for surface_data_element in
+            np.linalg.norm(surface_data_element.points_list, ord=None, axis=None).max() for surface_data_element in
             surface_data_list.list)
 
         normalized_surface_points = SurfaceDataList([])
         for surface_data in surface_data_list.list:
             print("Normalizing surface points for time step " + str(surface_data.time))
             normalized_time = normalize_time(surface_data.time, len(surface_data_list.list))
-            normalized_points = normalize_object_points(surface_data.surface_points, max_norm, shift_vector)
+            normalized_points = normalize_object_points(surface_data.points_list, max_norm, shift_vector)
             normalized_surface_points.append(
-                SurfaceData(normalized_points, surface_data.surface_labels, normalized_time))
+                SurfaceData(normalized_points, surface_data.labels_list, normalized_time))
 
         surface_data_list.list = normalized_surface_points.list
 
@@ -495,11 +495,38 @@ class SurfaceDataList:
             raise TypeError("surface_data must be an instance of SurfaceData")
         self.list.append(surface_data)
 
+    def filter_by_label(self, label_index):
+        """
+        Filter the SurfaceDataList by the given label index, keeping only the corresponding surface points.
+
+        Parameters:
+        - label_index: int, the label index to filter by
+
+        Returns:
+        - SurfaceDataList instance containing only the SurfaceData objects with the specified label index in both
+          surface_labels_list and surface_points_list
+        """
+        filtered_data = []
+
+        for surface_data in self.list:
+            # Find indices of points with the specified label index
+            matching_indices = [i for i, label in enumerate(surface_data.surface_labels_list) if label == label_index]
+
+            if matching_indices:
+                # Filter surface points and labels using these indices
+                filtered_points = [surface_data.surface_points_list[i] for i in matching_indices]
+                filtered_labels = [surface_data.surface_labels_list[i] for i in matching_indices]
+
+                # Create a new SurfaceData instance with the filtered points and labels
+                filtered_data.append(SurfaceData(filtered_points, filtered_labels, surface_data.time))
+
+        return SurfaceDataList(filtered_data)
+
 
 class SurfaceData:
     def __init__(self, surface_points, surface_labels, time):
-        self.surface_points = surface_points
-        self.surface_labels = surface_labels
+        self.points_list = surface_points
+        self.labels_list = surface_labels
         self.time = time
 
 
@@ -517,7 +544,7 @@ class SurfaceDataset(Dataset):
     def __init__(self, surface_data_list):
         self.data = []
         for surface_data in surface_data_list:
-            points = surface_data.surface_points
+            points = surface_data.points_list
             time = np.full((points.shape[0], 1), surface_data.time)
             points_with_time = np.hstack((points, time))
             self.data.append(points_with_time)
@@ -618,7 +645,7 @@ def save_clustered_data():
         pickle.dump(clustered_data, f)
 
 
-def save_nn_data(clustered_data):
+def save_surface_data(clustered_data):
     surface_data_list = pipeline_nn_data_prepare(clustered_data)
 
     # save the surface data list
@@ -646,7 +673,7 @@ if __name__ == '__main__':
     if not os.path.exists(SURFACE_DATA_LIST_FILEPATH):
         with open(CLUSTERED_DATA_FILEPATH, 'rb') as f:
             clustered_data = pickle.load(f)
-        save_nn_data(clustered_data)
+        save_surface_data(clustered_data)
     else:
         print("Neural network data already processed.")
 
@@ -655,8 +682,7 @@ if __name__ == '__main__':
         surface_data_list = pickle.load(f)
 
     # test train neural network
-    surface_data_cluster_0 = [surface_data for surface_data in surface_data_list.list if
-                              surface_data.surface_labels == 0]
+    surface_data_cluster_0 = surface_data_list.filter_by_label(0)
 
     model_weights_path = MODEL_WEIGHTS_FILEPATH
     num_epochs = 100
