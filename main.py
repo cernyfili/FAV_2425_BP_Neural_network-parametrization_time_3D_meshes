@@ -14,6 +14,21 @@ from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn.cluster import DBSCAN
 import os
 
+
+# region Constants
+
+# region relative constants
+
+PUB_data_folder_path = 'data/raw/casual_man/'  # Update with the correct path
+viz_obj_file_path = 'data/raw/casual_man/axyz_000001.obj'  # Path to your .obj file
+PROCESSED_DATE_FOLDER = 'data/processed/casual'
+MODEL_WEIGHTS_FOLDER = 'data/processed/casual/'
+
+# endregion
+
+
+
+# region static constants
 SURFACE_DATA_LIST_FILENAME = 'surface_data_list.pkl'
 
 CLUSTERED_DATA_FILENAME = 'clustered_data.pkl'
@@ -26,16 +41,10 @@ RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 
 JSON_FILENAME = "center_mesh_pairs.json"
 
-# region Constants
-
-PUB_data_folder_path = 'data/raw/casual_man/'  # Update with the correct path
-viz_obj_file_path = 'data/raw/casual_man/axyz_000001.obj'  # Path to your .obj file
-PROCESSED_DATE_FOLDER = 'data/processed/casual'
-MODEL_WEIGHTS_FOLDER = 'data/processed/casual/'
-
 SURFACE_DATA_LIST_FILEPATH = os.path.join(PROCESSED_DATE_FOLDER, SURFACE_DATA_LIST_FILENAME)
 CLUSTERED_DATA_FILEPATH = os.path.join(PROCESSED_DATE_FOLDER, CLUSTERED_DATA_FILENAME)
 MODEL_WEIGHTS_FILEPATH = os.path.join(MODEL_WEIGHTS_FOLDER, MODEL_WEIGHTS_FILENAME)
+# endregion
 
 # endregion
 
@@ -610,12 +619,10 @@ def save_clustered_data():
 
 
 def save_nn_data(clustered_data):
-    data_processed_folder_path = PROCESSED_DATE_FOLDER
-
     surface_data_list = pipeline_nn_data_prepare(clustered_data)
 
     # save the surface data list
-    with open(os.path.join(data_processed_folder_path, SURFACE_DATA_LIST_FILENAME), 'wb') as f:
+    with open(SURFACE_DATA_LIST_FILEPATH, 'wb') as f:
         pickle.dump(surface_data_list, f)
 
 
@@ -630,20 +637,21 @@ if __name__ == '__main__':
     if not os.path.exists(data_processed_folder_path):
         os.makedirs(data_processed_folder_path)
     # check if clustered data is already processed
-    if not os.path.exists(os.path.join(data_processed_folder_path, CLUSTERED_DATA_FILENAME)):
+    if not os.path.exists(CLUSTERED_DATA_FILEPATH):
         save_clustered_data()
     else:
         print("Clustered data already processed.")
+
     # check if nn data is already processed
-    if not os.path.exists(os.path.join(data_processed_folder_path, SURFACE_DATA_LIST_FILENAME)):
-        with open(os.path.join(data_processed_folder_path, CLUSTERED_DATA_FILENAME), 'rb') as f:
+    if not os.path.exists(SURFACE_DATA_LIST_FILEPATH):
+        with open(CLUSTERED_DATA_FILEPATH, 'rb') as f:
             clustered_data = pickle.load(f)
         save_nn_data(clustered_data)
     else:
         print("Neural network data already processed.")
 
     # pickle load surface_data
-    with open(os.path.join(data_processed_folder_path, SURFACE_DATA_LIST_FILENAME), 'rb') as f:
+    with open(SURFACE_DATA_LIST_FILEPATH, 'rb') as f:
         surface_data_list = pickle.load(f)
 
     # test train neural network
