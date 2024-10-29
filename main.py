@@ -12,10 +12,13 @@ import matplotlib.pyplot as plt
 import trimesh
 from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn.cluster import DBSCAN
+import os
 
 SURFACE_DATA_LIST_FILENAME = 'surface_data_list.pkl'
 
 CLUSTERED_DATA_FILENAME = 'clustered_data.pkl'
+
+MODEL_WEIGHTS_FILENAME = 'model_weights.pth'
 
 NUM_CLUSTERS = 5
 
@@ -28,7 +31,11 @@ JSON_FILENAME = "center_mesh_pairs.json"
 PUB_data_folder_path = 'data/raw/casual_man/'  # Update with the correct path
 viz_obj_file_path = 'data/raw/casual_man/axyz_000001.obj'  # Path to your .obj file
 PROCESSED_DATE_FOLDER = 'data/processed/casual'
+MODEL_WEIGHTS_FOLDER = 'data/processed/casual/'
 
+SURFACE_DATA_LIST_FILEPATH = os.path.join(PROCESSED_DATE_FOLDER, SURFACE_DATA_LIST_FILENAME)
+CLUSTERED_DATA_FILEPATH = os.path.join(PROCESSED_DATE_FOLDER, CLUSTERED_DATA_FILENAME)
+MODEL_WEIGHTS_FILEPATH = os.path.join(MODEL_WEIGHTS_FOLDER, MODEL_WEIGHTS_FILENAME)
 
 # endregion
 
@@ -531,7 +538,7 @@ class MLP(nn.Module):
         return decoded_output
 
 
-def train_neural_network(data, num_epochs=100):
+def train_neural_network(data, num_epochs, model_save_path='model_weights.pth'):
     # Create dataset and dataloader
     dataset = SurfaceDataset(data)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
@@ -555,7 +562,9 @@ def train_neural_network(data, num_epochs=100):
 
         print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
 
-
+    # Save the model weights
+    torch.save(model.state_dict(), model_save_path)
+    print(f'Model weights saved to {model_save_path}')
 # endregion
 # endregion
 
@@ -640,6 +649,9 @@ if __name__ == '__main__':
     # test train neural network
     surface_data_cluster_0 = [surface_data for surface_data in surface_data_list.list if
                               surface_data.surface_labels == 0]
-    train_neural_network(surface_data_cluster_0)
+
+    model_weights_path = MODEL_WEIGHTS_FILEPATH
+    num_epochs = 100
+    train_neural_network(surface_data_cluster_0, num_epochs, model_weights_path)
 
 # endregion
