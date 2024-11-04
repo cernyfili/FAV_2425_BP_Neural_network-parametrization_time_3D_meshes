@@ -14,7 +14,6 @@ from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn.cluster import DBSCAN
 import os
 
-
 # region Constants
 
 # region relative constants
@@ -25,7 +24,6 @@ PROCESSED_DATE_FOLDER = 'data/processed/casual'
 MODEL_WEIGHTS_FOLDER = 'data/processed/casual/'
 
 # endregion
-
 
 
 # region static constants
@@ -44,6 +42,8 @@ JSON_FILENAME = "center_mesh_pairs.json"
 SURFACE_DATA_LIST_FILEPATH = os.path.join(PROCESSED_DATE_FOLDER, SURFACE_DATA_LIST_FILENAME)
 CLUSTERED_DATA_FILEPATH = os.path.join(PROCESSED_DATE_FOLDER, CLUSTERED_DATA_FILENAME)
 MODEL_WEIGHTS_FILEPATH = os.path.join(MODEL_WEIGHTS_FOLDER, MODEL_WEIGHTS_FILENAME)
+
+
 # endregion
 
 # endregion
@@ -510,12 +510,14 @@ class SurfaceDataList:
 
         for surface_data in self.list:
             # Find indices of points with the specified label index
-            matching_indices = [i for i, label in enumerate(surface_data.surface_labels_list) if label == label_index]
-
+            matching_indices = [i for i, label in enumerate(surface_data.labels_list) if label == label_index]
+            if matching_indices is None:
+                # throw error
+                raise ValueError("No points with the specified label index found.")
             if matching_indices:
                 # Filter surface points and labels using these indices
-                filtered_points = [surface_data.surface_points_list[i] for i in matching_indices]
-                filtered_labels = [surface_data.surface_labels_list[i] for i in matching_indices]
+                filtered_points = [surface_data.points_list[i] for i in matching_indices]
+                filtered_labels = [surface_data.labels_list[i] for i in matching_indices]
 
                 # Create a new SurfaceData instance with the filtered points and labels
                 filtered_data.append(SurfaceData(filtered_points, filtered_labels, surface_data.time))
@@ -542,9 +544,11 @@ from torch.utils.data import Dataset
 
 class SurfaceDataset(Dataset):
     def __init__(self, surface_data_list):
+        if surface_data_list is None:
+            raise ValueError("surface_data_list must not be None")
         self.data = []
         for surface_data in surface_data_list:
-            points = surface_data.points_list
+            points = np.array(surface_data.points_list)  # Ensure points is a numpy array
             time = np.full((points.shape[0], 1), surface_data.time)
             points_with_time = np.hstack((points, time))
             self.data.append(points_with_time)
@@ -601,6 +605,8 @@ def train_neural_network(data, num_epochs, model_save_path='model_weights.pth'):
     # Save the model weights
     torch.save(model.state_dict(), model_save_path)
     print(f'Model weights saved to {model_save_path}')
+
+
 # endregion
 # endregion
 
@@ -682,10 +688,10 @@ if __name__ == '__main__':
         surface_data_list = pickle.load(f)
 
     # test train neural network
-    surface_data_cluster_0 = surface_data_list.filter_by_label(0)
+    surface_data_cluster_0 = surface_data_list.filter_by_label(1)
 
     model_weights_path = MODEL_WEIGHTS_FILEPATH
     num_epochs = 100
-    train_neural_network(surface_data_cluster_0, num_epochs, model_weights_path)
+    train_neural_network(surface_data_cluster_0.list, num_epochs, model_weights_path)
 
 # endregion
