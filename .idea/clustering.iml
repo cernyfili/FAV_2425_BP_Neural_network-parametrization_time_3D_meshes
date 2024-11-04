@@ -2,6 +2,7 @@
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/data-main/processed" />
       <excludeFolder url="file://$MODULE_DIR$/models" />
     </content>
     <orderEntry type="jdk" jdkName="C:\tools\Anaconda3" jdkType="Python SDK" />

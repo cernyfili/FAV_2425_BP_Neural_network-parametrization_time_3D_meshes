@@ -13,15 +13,22 @@ import trimesh
 from scipy.cluster.hierarchy import linkage, fcluster
 from sklearn.cluster import DBSCAN
 import os
+import logging
+
+# Configure logging for more robust output control
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # region Constants
 
 # region relative constants
 
-PUB_data_folder_path = 'data/raw/casual_man/'  # Update with the correct path
-viz_obj_file_path = 'data/raw/casual_man/axyz_000001.obj'  # Path to your .obj file
-PROCESSED_DATE_FOLDER = 'data/processed/casual'
-MODEL_WEIGHTS_FOLDER = 'data/processed/casual/'
+RAW_DATA_FOLDERPATH = 'data-main/raw/casual_man/'  # Update with the correct path
+VIZUALIZATION_OBJ_FILEPATH = 'data-main/raw/casual_man/axyz_000001.obj'  # Path to your .obj file
+PROCESSED_DATA_FOLDERPATH = 'data-main/processed/casual'
+MODEL_WEIGHTS_FOLDERPATH = 'data-main/processed/casual/'
+IMAGE_SAVE_FOLDERPATH = 'data-main/processed/casual/'
+MODEL_WEIGHTS_FILEPATH_TEMPLATE = "path/to/model_weights_cluster_{cluster}.pth"
+
 
 # endregion
 
@@ -39,9 +46,9 @@ RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 
 JSON_FILENAME = "center_mesh_pairs.json"
 
-SURFACE_DATA_LIST_FILEPATH = os.path.join(PROCESSED_DATE_FOLDER, SURFACE_DATA_LIST_FILENAME)
-CLUSTERED_DATA_FILEPATH = os.path.join(PROCESSED_DATE_FOLDER, CLUSTERED_DATA_FILENAME)
-MODEL_WEIGHTS_FILEPATH = os.path.join(MODEL_WEIGHTS_FOLDER, MODEL_WEIGHTS_FILENAME)
+SURFACE_DATA_LIST_FILEPATH = os.path.join(PROCESSED_DATA_FOLDERPATH, SURFACE_DATA_LIST_FILENAME)
+CLUSTERED_DATA_FILEPATH = os.path.join(PROCESSED_DATA_FOLDERPATH, CLUSTERED_DATA_FILENAME)
+MODEL_WEIGHTS_FILEPATH = os.path.join(MODEL_WEIGHTS_FOLDERPATH, MODEL_WEIGHTS_FILENAME)
 
 
 # endregion
@@ -83,7 +90,7 @@ def compute_max_distances_for_all_pairs(data, num_points_in_file):
             if distance > max_distances[p1, p2]:
                 max_distances[p1, p2] = distance
         i += 1
-        print("computing max distances" + str(i))
+        logging.info("computing max distances" + str(i))
     return max_distances
 
 
@@ -101,14 +108,14 @@ def dbscan_clustering_from_precomputed_distances(distances, eps=0.5, min_samples
 
 # Function to load .bin files and return data
 def load_bin_files(filepaths):
-    print("Loading .bin files...")
+    logging.info("Loading .bin files...")
     data = []
     points_in_file = None
     i = 0
     for filepath in filepaths:
 
         i += 1
-        print("Loading file " + str(i) + " of " + str(len(filepaths)))
+        logging.info("Loading file " + str(i) + " of " + str(len(filepaths)))
         # Read the binary file as 32-bit floats
         file_data = np.fromfile(filepath, dtype=np.float32)
         file_data = file_data[1:]  # first is size
@@ -167,7 +174,7 @@ def load_data(folder_path):
 
     # Compute the maximum distances between points
     max_distances = compute_max_distances_for_all_pairs(data, points_in_file)
-    print("Max distances computed between all pairs of points.")
+    logging.info("Max distances computed between all pairs of points.")
 
     # if max_distances is empty
     if not max_distances.any():
@@ -242,7 +249,7 @@ def hierarchical_cluster_data(folder_path, obj_file_path, file_type, num_cluster
     # Perform hierarchical clustering using precomputed distances
 
     labels = hierarchical_clustering_from_precomputed_distances(max_distances, n_clusters=num_clusters)
-    print("Hierarchical clustering completed.")
+    logging.info("Hierarchical clustering completed.")
     # Select points from a specific time step (for example, the first time step)
     points = data[0].reshape(-1, 3)  # Reshape into list of 3D points
 
@@ -414,7 +421,7 @@ class SurfaceDataList:
         """
         surface_data_list = SurfaceDataList([])
         for i, mesh_file_path in enumerate(meshes_filepaths_list):
-            print("Creating surface points for mesh " + str(i + 1) + " of " + str(len(meshes_filepaths_list)))
+            logging.info("Creating surface points for mesh " + str(i + 1) + " of " + str(len(meshes_filepaths_list)))
             mesh = trimesh.load(mesh_file_path)
             centers_points = center_points_list[i]
             surface_points, surface_labels = create_categorized_surface_points(mesh, centers_points,
@@ -445,8 +452,8 @@ class SurfaceDataList:
         def normalize_time(time, length):
             length = length - 1
             new_time = time / length
-            # print all velues
-            print("Time: ", time, "Length: ", length, "New time: ", new_time)
+            # logging.info all velues
+            logging.info("Time: ", time, "Length: ", length, "New time: ", new_time)
             return new_time
 
         def scale_object_points(object_points, norm):
@@ -472,7 +479,7 @@ class SurfaceDataList:
 
         normalized_surface_points = SurfaceDataList([])
         for surface_data in surface_data_list.list:
-            print("Normalizing surface points for time step " + str(surface_data.time))
+            logging.info("Normalizing surface points for time step " + str(surface_data.time))
             normalized_time = normalize_time(surface_data.time, len(surface_data_list.list))
             normalized_points = normalize_object_points(surface_data.points_list, max_norm, shift_vector)
             normalized_surface_points.append(
@@ -482,7 +489,7 @@ class SurfaceDataList:
 
     def prepare_data(self, meshes_filepaths_list, center_points_list, cluster_center_labels, num_surface_points):
 
-        print("Creating surface points for all meshes...")
+        logging.info("Creating surface points for all meshes...")
         self.create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list, cluster_center_labels,
                                                   num_surface_points)
         self.add_time()
@@ -578,33 +585,139 @@ class MLP(nn.Module):
         return decoded_output
 
 
-def train_neural_network(data, num_epochs, model_save_path='model_weights.pth'):
-    # Create dataset and dataloader
-    dataset = SurfaceDataset(data)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
-    # Initialize model, loss function, and optimizer
-    model = MLP()
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    # Training loop
-    for epoch in range(num_epochs):
-        for inputs, targets in dataloader:
-            inputs, targets = inputs.float(), targets.float()
+# def train_neural_network(data, num_epochs, model_save_path='model_weights.pth'):
+#     # Create dataset and dataloader
+#     dataset = SurfaceDataset(data)
+#     dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
+#     # Initialize model, loss function, and optimizer
+#     model = MLP()
+#     criterion = nn.MSELoss()
+#     optimizer = optim.Adam(model.parameters(), lr=0.001)
+#     # Training loop
+#     for epoch in range(num_epochs):
+#         for inputs, targets in dataloader:
+#             inputs, targets = inputs.float(), targets.float()
+#
+#             # Forward pass
+#             outputs = model(inputs)
+#             loss = criterion(outputs, targets)
+#
+#             # Backward pass and optimization
+#             optimizer.zero_grad()
+#             loss.backward()
+#             optimizer.step()
+#
+#         logging.info(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+#
+#     # Save the model weights
+#     torch.save(model.state_dict(), model_save_path)
+#     logging.info(f'Model weights saved to {model_save_path}')
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader, Subset
+import numpy as np
 
-            # Forward pass
+# Function to get the appropriate device
+def get_device():
+    #return torch.device('cuda' if torch.cuda.is_available() else 'cpu') #TODO add GPU compilation support
+    return torch.device('cpu')
+
+# Function to split data and create data loaders
+def create_data_loaders(data, batch_size=32):
+    train_indices, val_indices = train_test_split(range(len(data)), test_size=0.2, random_state=42)
+    train_dataset = Subset(data, train_indices)
+    val_dataset = Subset(data, val_indices)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    return train_loader, val_loader
+
+# Function to perform one training epoch
+def train_one_epoch(model, train_loader, criterion, optimizer, device):
+    model.train()  # Set model to training mode
+    train_loss = 0
+    for inputs, targets in train_loader:
+        inputs, targets = inputs.float().to(device), targets.float().to(device)
+
+        # Forward pass
+        outputs = model(inputs)
+        loss = criterion(outputs, targets)
+
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping
+        optimizer.step()
+
+        train_loss += loss.item()
+
+    return train_loss / len(train_loader)  # Return average loss for the epoch
+
+# Function to evaluate the model on the validation set
+def evaluate(model, val_loader, criterion, device):
+    model.eval()  # Set model to evaluation mode
+    val_loss = 0
+    with torch.no_grad():
+        for inputs, targets in val_loader:
+            inputs, targets = inputs.float().to(device), targets.float().to(device)
             outputs = model(inputs)
             loss = criterion(outputs, targets)
+            val_loss += loss.item()
+    return val_loss / len(val_loader)  # Return average validation loss
 
-            # Backward pass and optimization
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+# Function to save the model checkpoint
+def save_checkpoint(model, optimizer, epoch, val_loss, path):
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'val_loss': val_loss,
+    }, path)
+    logging.info(f"Model saved with validation loss {val_loss:.4f} at epoch {epoch}")
 
-        print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item():.4f}')
+# Main training function with early stopping and scheduler
+def train_neural_network(data, num_epochs, patience=5, model_save_path='model_weights.pth'):
+    device = get_device()
+    logging.info(f"Using device: {device}")
 
-    # Save the model weights
-    torch.save(model.state_dict(), model_save_path)
-    print(f'Model weights saved to {model_save_path}')
+    train_loader, val_loader = create_data_loaders(data)
+    model = MLP().to(device)
+    criterion = nn.MSELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
+
+    best_val_loss = float('inf')
+    epochs_no_improve = 0
+    best_epoch = 0
+
+    for epoch in range(1, num_epochs + 1):
+        # Train and evaluate for one epoch
+        train_loss = train_one_epoch(model, train_loader, criterion, optimizer, device)
+        val_loss = evaluate(model, val_loader, criterion, device)
+
+        # Learning rate scheduler step
+        scheduler.step(val_loss)
+
+        logging.info(f"Epoch [{epoch}/{num_epochs}], Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+
+        # Check for early stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_epoch = epoch
+            epochs_no_improve = 0
+            save_checkpoint(model, optimizer, epoch, best_val_loss, model_save_path)
+        else:
+            epochs_no_improve += 1
+            logging.info(f"No improvement for {epochs_no_improve} epochs")
+
+        if epochs_no_improve >= patience:
+            logging.info(f"Early stopping after {epoch} epochs (Best epoch: {best_epoch} with val loss {best_val_loss:.4f})")
+            break
+
+    logging.info(f"Training completed. Best model saved to {model_save_path}")
+
+
 
 
 # endregion
@@ -613,7 +726,7 @@ def train_neural_network(data, num_epochs, model_save_path='model_weights.pth'):
 # region Pipelines
 def pipeline_clustered_data_prepare():
     num_clusters = NUM_CLUSTERS
-    folder_path_meshes = PUB_data_folder_path
+    folder_path_meshes = RAW_DATA_FOLDERPATH
     max_distances, center_points_list = load_data(folder_path_meshes)
 
     cluster_center_labels = hierarchical_clustering_from_precomputed_distances(max_distances, n_clusters=num_clusters)
@@ -622,7 +735,7 @@ def pipeline_clustered_data_prepare():
 
 
 def pipeline_nn_data_prepare(clustered_data):
-    meshes_folder_path = PUB_data_folder_path
+    meshes_folder_path = RAW_DATA_FOLDERPATH
     json_file_name = JSON_FILENAME
 
     json_file_path = meshes_folder_path + json_file_name
@@ -630,19 +743,19 @@ def pipeline_nn_data_prepare(clustered_data):
     cluster_center_labels = clustered_data.labels
 
     meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
-    print("Creating surface points for all meshes...")
+    logging.info("Creating surface points for all meshes...")
     PUB_surface_data_list = SurfaceDataList([])
     PUB_surface_data_list.create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list,
                                                                cluster_center_labels, 1000)
     """list of tuples with surface points and labels for all meshes specified in config json file"""
     PUB_surface_data_list.add_time()
     PUB_surface_data_list.normalize()
-    print("Surface points created and normalized.")
+    logging.info("Surface points created and normalized.")
     return PUB_surface_data_list
 
 
 def save_clustered_data():
-    data_processed_folder_path = PROCESSED_DATE_FOLDER
+    data_processed_folder_path = PROCESSED_DATA_FOLDERPATH
 
     clustered_data = pipeline_clustered_data_prepare()
 
@@ -664,34 +777,217 @@ def save_surface_data(clustered_data):
 
 
 # region Main
-if __name__ == '__main__':
-    # check if files are already processed
-    data_processed_folder_path = PROCESSED_DATE_FOLDER
-    if not os.path.exists(data_processed_folder_path):
-        os.makedirs(data_processed_folder_path)
-    # check if clustered data is already processed
+
+# Utility function to create a directory if it doesn't exist
+def ensure_directory_exists(directory_path):
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+        logging.info(f"Created directory: {directory_path}")
+
+# Utility function to load a pickle file safely
+def load_pickle_file(filepath):
+    try:
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        logging.error(f"File not found: {filepath}")
+    except pickle.UnpicklingError:
+        logging.error(f"Failed to unpickle file: {filepath}")
+    return None
+
+# Function to process and save clustered data if not already processed
+def process_clustered_data():
     if not os.path.exists(CLUSTERED_DATA_FILEPATH):
         save_clustered_data()
+        logging.info("Clustered data processed and saved.")
     else:
-        print("Clustered data already processed.")
+        logging.info("Clustered data already processed.")
 
-    # check if nn data is already processed
+# Function to process and save neural network data if not already processed
+def process_nn_data():
     if not os.path.exists(SURFACE_DATA_LIST_FILEPATH):
-        with open(CLUSTERED_DATA_FILEPATH, 'rb') as f:
-            clustered_data = pickle.load(f)
-        save_surface_data(clustered_data)
+        clustered_data = load_pickle_file(CLUSTERED_DATA_FILEPATH)
+        if clustered_data is not None:
+            save_surface_data(clustered_data)
+            logging.info("Neural network data processed and saved.")
     else:
-        print("Neural network data already processed.")
+        logging.info("Neural network data already processed.")
 
-    # pickle load surface_data
-    with open(SURFACE_DATA_LIST_FILEPATH, 'rb') as f:
-        surface_data_list = pickle.load(f)
 
-    # test train neural network
-    surface_data_cluster_0 = surface_data_list.filter_by_label(1)
+def save_all_clusters_surface_points_image(original_points_dict, processed_points_dict, image_save_folder=IMAGE_SAVE_FOLDERPATH):
+    """
+    Plots and saves an image of surface points for all clusters, showing both original and processed points.
+    
+    Parameters:
+    - original_points_dict (dict): Dictionary where keys are cluster labels and values are arrays of original points 
+      (shape: [num_points, 2] or [num_points, 3]).
+    - processed_points_dict (dict): Dictionary where keys are cluster labels and values are arrays of processed points 
+      from the neural network for each cluster (same shape as original points).
+    - image_save_folder (str): Directory to save the image.
+    """
+    # Create a plot
+    fig, ax = plt.subplots(figsize=(10, 8))
 
-    model_weights_path = MODEL_WEIGHTS_FILEPATH
-    num_epochs = 100
-    train_neural_network(surface_data_cluster_0.list, num_epochs, model_weights_path)
+    # Define a color map for distinguishing clusters
+    colors = plt.cm.get_cmap('tab10', len(original_points_dict))  # Use a color map with enough unique colors
 
+    for i, cluster in enumerate(original_points_dict.keys()):
+        original_points = original_points_dict[cluster]
+        processed_points = processed_points_dict[cluster]
+
+        # Scatter plot for original points of this cluster
+        ax.scatter(
+            original_points[:, 0], original_points[:, 1],
+            color=colors(i), label=f'Original Cluster {cluster}', alpha=0.5, s=20
+        )
+
+        # Scatter plot for processed points of this cluster
+        ax.scatter(
+            processed_points[:, 0], processed_points[:, 1],
+            color=colors(i), edgecolor='black', marker='x', label=f'Processed Cluster {cluster}', s=30
+        )
+
+    # Labeling, legend, and grid
+    ax.set_title('Surface Points for All Clusters')
+    ax.set_xlabel('X Coordinate')
+    ax.set_ylabel('Y Coordinate')
+    ax.legend(loc='best', bbox_to_anchor=(1.05, 1), ncol=1)
+    ax.grid(True)
+
+    # Save the plot as an image
+    image_path = os.path.join(image_save_folder, 'all_clusters_surface_points.png')
+    plt.tight_layout()
+    plt.savefig(image_path)
+    plt.close(fig)  # Close the figure to free memory
+
+    logging.info(f"Saved surface points image for all clusters at {image_path}")
+
+
+# Function to train the neural network for each cluster
+def train_nn_for_all_clusters(surface_data_list, max_epochs=100, patience=5):
+    # Identify unique clusters in the data
+    unique_clusters = surface_data_list.get_unique_labels()
+
+    for cluster in unique_clusters:
+        # Filter data for the current cluster
+        surface_data_cluster = surface_data_list.filter_by_label(cluster)
+
+        # Define a specific filepath for the model weights for this cluster
+        model_weights_filepath = MODEL_WEIGHTS_FILEPATH_TEMPLATE.format(cluster=cluster)
+
+        logging.info(f"Training neural network for cluster {cluster}...")
+
+        # Train the neural network on the current cluster's data
+        train_neural_network(surface_data_cluster.list, max_epochs, patience, model_weights_filepath)
+
+        logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
+
+def save_combined_surface_points_image(original_points_all, processed_points_all, image_save_folder=IMAGE_SAVE_FOLDERPATH):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    # Scatter plot for all original points
+    ax.scatter(
+        original_points_all[:, 0], original_points_all[:, 1],
+        color='blue', label='Original Points', alpha=0.5, s=20
+    )
+
+    # Scatter plot for all processed points
+    ax.scatter(
+        processed_points_all[:, 0], processed_points_all[:, 1],
+        color='red', label='Processed Points', alpha=0.5, s=20
+    )
+
+    # Labels, title, and legend
+    ax.set_title('Surface Points for All Clusters')
+    ax.set_xlabel('X Coordinate')
+    ax.set_ylabel('Y Coordinate')
+    ax.legend()
+    ax.grid(True)
+
+    # Save the plot
+    image_path = os.path.join(image_save_folder, 'combined_surface_points.png')
+    plt.savefig(image_path)
+    plt.close(fig)
+
+    print(f"Saved combined surface points image at {image_path}")
+
+def load_trained_model(model_weights_filepath, input_size, hidden_size, output_size):
+    """
+    Loads the trained neural network model weights from a specified file path.
+
+    Args:
+        model_weights_filepath (str): The path to the file containing the model weights.
+        input_size (int): The number of input features for the model.
+        hidden_size (int): The number of hidden units in the model.
+        output_size (int): The number of output features for the model.
+
+    Returns:
+        model (nn.Module): The loaded neural network model.
+    """
+    # Create an instance of the model
+    model = MLP(input_size, hidden_size, output_size)
+
+    # Load the model weights
+    model.load_state_dict(torch.load(model_weights_filepath))
+
+    # Set the model to evaluation mode
+    model.eval()
+
+    return model
+
+def process_and_save_combined_image_for_all_clusters(surface_data_list):
+    original_points_all = []
+    processed_points_all = []
+
+    unique_clusters = surface_data_list.get_unique_labels()
+
+    for cluster in unique_clusters:
+        # Load the original surface points for the current cluster
+        surface_data_cluster = surface_data_list.filter_by_label(cluster)
+        original_points = np.array(surface_data_cluster.list)  # Convert to numpy array if necessary
+
+        # Load the trained model for the current cluster
+        model_weights_filepath = MODEL_WEIGHTS_FILEPATH_TEMPLATE.format(cluster=cluster)
+        model = load_trained_model(model_weights_filepath)
+
+        # Process the original points through the model
+        with torch.no_grad():
+            processed_points = model(torch.tensor(original_points, dtype=torch.float32)).numpy()
+
+        # Accumulate all original and processed points
+        original_points_all.append(original_points)
+        processed_points_all.append(processed_points)
+
+    # Convert lists to numpy arrays for plotting
+    original_points_all = np.vstack(original_points_all) if original_points_all else np.empty((0, 2))
+    processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 2))
+
+    # Save the combined image
+    save_combined_surface_points_image(original_points_all, processed_points_all)
+
+# Main function to orchestrate the processing and training for each cluster
+def main():
+    # Ensure processed data directory exists
+    ensure_directory_exists(PROCESSED_DATA_FOLDERPATH)
+
+    # Process clustered and neural network data
+    process_clustered_data()
+    process_nn_data()
+
+    # Load the processed surface data list
+    surface_data_list = load_pickle_file(SURFACE_DATA_LIST_FILEPATH)
+    if surface_data_list is None:
+        logging.error("Surface data list could not be loaded. Exiting.")
+        return
+
+    # Train a neural network for each cluster in the data
+    train_nn_for_all_clusters(surface_data_list, max_epochs=100, patience=5)
+
+    # Process and save combined image for all clusters after training
+    process_and_save_combined_image_for_all_clusters(surface_data_list)
+
+if __name__ == '__main__':
+    main()
 # endregion
