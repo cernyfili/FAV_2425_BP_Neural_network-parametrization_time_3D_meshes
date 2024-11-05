@@ -21,19 +21,27 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # region Constants
 
 # region relative constants
-
+EXPORT_FOLDERNAME = "casual"
+PROCESSED_FOLDERPATH = "data-main/processed"
 RAW_DATA_FOLDERPATH = 'data-main/raw/casual_man/'  # Update with the correct path
-VIZUALIZATION_OBJ_FILEPATH = 'data-main/raw/casual_man/axyz_000001.obj'  # Path to your .obj file
-PROCESSED_DATA_FOLDERPATH = 'data-main/processed/casual'
-MODEL_WEIGHTS_FOLDERPATH = 'data-main/processed/casual/'
-IMAGE_SAVE_FOLDERPATH = 'data-main/processed/casual/'
-MODEL_WEIGHTS_FILEPATH_TEMPLATE = "path/to/model_weights_cluster_{cluster}.pth"
 
+VIZUALIZATION_OBJ_FILEPATH = 'data-main/raw/casual_man/axyz_000001.obj'  # Path to your .obj file
 
 # endregion
 
 
 # region static constants
+MODEL_WEIGHTS_TEMPLATENAME = "model_weights_cluster_{cluster}.pth"
+
+EXPORT_FOLDERPATH = os.path.join(PROCESSED_FOLDERPATH, EXPORT_FOLDERNAME)
+os.makedirs(EXPORT_FOLDERPATH, exist_ok=True)
+
+PROCESSED_DATA_FOLDERPATH = EXPORT_FOLDERPATH
+MODEL_WEIGHTS_FOLDERPATH = EXPORT_FOLDERPATH
+IMAGE_SAVE_FOLDERPATH = EXPORT_FOLDERPATH
+MODEL_WEIGHTS_FILEPATH_TEMPLATE = os.path.join(EXPORT_FOLDERPATH, MODEL_WEIGHTS_TEMPLATENAME)
+
+
 SURFACE_DATA_LIST_FILENAME = 'surface_data_list.pkl'
 
 CLUSTERED_DATA_FILENAME = 'clustered_data.pkl'
