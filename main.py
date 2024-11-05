@@ -15,6 +15,7 @@ from sklearn.cluster import DBSCAN
 import os
 import logging
 
+
 # Configure logging for more robust output control
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -40,7 +41,6 @@ PROCESSED_DATA_FOLDERPATH = EXPORT_FOLDERPATH
 MODEL_WEIGHTS_FOLDERPATH = EXPORT_FOLDERPATH
 IMAGE_SAVE_FOLDERPATH = EXPORT_FOLDERPATH
 MODEL_WEIGHTS_FILEPATH_TEMPLATE = os.path.join(EXPORT_FOLDERPATH, MODEL_WEIGHTS_TEMPLATENAME)
-
 
 SURFACE_DATA_LIST_FILENAME = 'surface_data_list.pkl'
 
@@ -411,10 +411,50 @@ def get_filepaths_from_json(folder_path, json_file_path):
 
 
 class SurfaceDataList:
-    def __init__(self, surface_data_list):
-        if not all(isinstance(item, SurfaceData) for item in surface_data_list):
+    def __init__(self, surface_data_list : list):
+        if not isinstance(surface_data_list, list) or not all(isinstance(item, SurfaceData) for item in surface_data_list):
             raise TypeError("All items in surface_data_list must be instances of SurfaceData")
         self.list = surface_data_list
+        # Initialize unique_clusters at creation
+        self.unique_clusters = self.compute_unique_clusters()
+
+    def compute_unique_clusters(self):
+        """
+        Private method to compute unique clusters from the surface data list.
+        """
+        unique_clusters = set()
+        for surface_data in self.list:
+            unique_clusters.update(surface_data.labels_list)
+        return unique_clusters
+
+    def get_unique_clusters(self):
+        """
+        Return the set of unique clusters.
+        """
+        self.unique_clusters = self.compute_unique_clusters()
+
+        if self.unique_clusters is None or not self.unique_clusters:
+            raise Exception("Unique clusters is Empty")
+
+        return self.unique_clusters
+
+    def append(self, surface_data):
+        """
+        Append a SurfaceData object to the list and update unique clusters.
+        """
+        if not isinstance(surface_data, SurfaceData):
+            raise TypeError("surface_data must be an instance of SurfaceData")
+        self.list.append(surface_data)
+        self.unique_clusters.update(surface_data.labels_list)  # Update unique clusters
+
+    def remove(self, surface_data):
+        """
+        Remove a SurfaceData object from the list and update unique clusters.
+        """
+        if surface_data in self.list:
+            self.list.remove(surface_data)
+            # Recompute unique clusters in case a label is no longer present
+            self.unique_clusters = self.compute_unique_clusters()
 
     def create_surface_points_from_mesh_list(self, meshes_filepaths_list, center_points_list, cluster_center_labels,
                                              num_surface_points):
@@ -460,8 +500,6 @@ class SurfaceDataList:
         def normalize_time(time, length):
             length = length - 1
             new_time = time / length
-            # logging.info all velues
-            logging.info("Time: ", time, "Length: ", length, "New time: ", new_time)
             return new_time
 
         def scale_object_points(object_points, norm):
@@ -558,7 +596,7 @@ from torch.utils.data import Dataset
 
 
 class SurfaceDataset(Dataset):
-    def __init__(self, surface_data_list):
+    def __init__(self, surface_data_list: list):
         if surface_data_list is None:
             raise ValueError("surface_data_list must not be None")
         self.data = []
@@ -627,18 +665,29 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Subset
 import numpy as np
 
+
 # Function to get the appropriate device
 def get_device():
-    #return torch.device('cuda' if torch.cuda.is_available() else 'cpu') #TODO add GPU compilation support
+    # return torch.device('cuda' if torch.cuda.is_available() else 'cpu') #TODO add GPU compilation support
     return torch.device('cpu')
 
+
 # Function to split data and create data loaders
-def create_data_loaders(data, batch_size=32):
-    train_indices, val_indices = train_test_split(range(len(data)), test_size=0.2, random_state=42)
-    train_dataset = Subset(data, train_indices)
-    val_dataset = Subset(data, val_indices)
+def create_data_loaders(surface_data_list, batch_size=32):
+    # Create an instance of SurfaceDataset using the provided surface_data_list
+    dataset = SurfaceDataset(surface_data_list)
+
+    # Split indices for training and validation
+    train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+
+    # Create subsets for training and validation
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset = Subset(dataset, val_indices)
+
+    # Create data loaders for training and validation
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
     return train_loader, val_loader
 
 # Function to perform one training epoch
@@ -662,6 +711,7 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device):
 
     return train_loss / len(train_loader)  # Return average loss for the epoch
 
+
 # Function to evaluate the model on the validation set
 def evaluate(model, val_loader, criterion, device):
     model.eval()  # Set model to evaluation mode
@@ -674,6 +724,7 @@ def evaluate(model, val_loader, criterion, device):
             val_loss += loss.item()
     return val_loss / len(val_loader)  # Return average validation loss
 
+
 # Function to save the model checkpoint
 def save_checkpoint(model, optimizer, epoch, val_loss, path):
     torch.save({
@@ -684,15 +735,18 @@ def save_checkpoint(model, optimizer, epoch, val_loss, path):
     }, path)
     logging.info(f"Model saved with validation loss {val_loss:.4f} at epoch {epoch}")
 
+NN_MODEL = MLP()
+NN_OPTIMIZER = optim.Adam(NN_MODEL.parameters(), lr=0.001)
+
 # Main training function with early stopping and scheduler
 def train_neural_network(data, num_epochs, patience=5, model_save_path='model_weights.pth'):
     device = get_device()
     logging.info(f"Using device: {device}")
 
     train_loader, val_loader = create_data_loaders(data)
-    model = MLP().to(device)
+    model = NN_MODEL
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = NN_OPTIMIZER
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
 
     best_val_loss = float('inf')
@@ -707,7 +761,7 @@ def train_neural_network(data, num_epochs, patience=5, model_save_path='model_we
         # Learning rate scheduler step
         scheduler.step(val_loss)
 
-        logging.info(f"Epoch [{epoch}/{num_epochs}], Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+        logging.info(f"Epoch [{epoch}/{num_epochs}], Train Loss: {train_loss:.10f}, Val Loss: {val_loss:.10f}")
 
         # Check for early stopping
         if val_loss < best_val_loss:
@@ -720,12 +774,11 @@ def train_neural_network(data, num_epochs, patience=5, model_save_path='model_we
             logging.info(f"No improvement for {epochs_no_improve} epochs")
 
         if epochs_no_improve >= patience:
-            logging.info(f"Early stopping after {epoch} epochs (Best epoch: {best_epoch} with val loss {best_val_loss:.4f})")
+            logging.info(
+                f"Early stopping after {epoch} epochs (Best epoch: {best_epoch} with val loss {best_val_loss:.4f})")
             break
 
     logging.info(f"Training completed. Best model saved to {model_save_path}")
-
-
 
 
 # endregion
@@ -792,6 +845,7 @@ def ensure_directory_exists(directory_path):
         os.makedirs(directory_path)
         logging.info(f"Created directory: {directory_path}")
 
+
 # Utility function to load a pickle file safely
 def load_pickle_file(filepath):
     try:
@@ -803,6 +857,7 @@ def load_pickle_file(filepath):
         logging.error(f"Failed to unpickle file: {filepath}")
     return None
 
+
 # Function to process and save clustered data if not already processed
 def process_clustered_data():
     if not os.path.exists(CLUSTERED_DATA_FILEPATH):
@@ -810,6 +865,7 @@ def process_clustered_data():
         logging.info("Clustered data processed and saved.")
     else:
         logging.info("Clustered data already processed.")
+
 
 # Function to process and save neural network data if not already processed
 def process_nn_data():
@@ -822,7 +878,8 @@ def process_nn_data():
         logging.info("Neural network data already processed.")
 
 
-def save_all_clusters_surface_points_image(original_points_dict, processed_points_dict, image_save_folder=IMAGE_SAVE_FOLDERPATH):
+def save_all_clusters_surface_points_image(original_points_dict, processed_points_dict,
+                                           image_save_folder=IMAGE_SAVE_FOLDERPATH):
     """
     Plots and saves an image of surface points for all clusters, showing both original and processed points.
     
@@ -872,9 +929,10 @@ def save_all_clusters_surface_points_image(original_points_dict, processed_point
 
 
 # Function to train the neural network for each cluster
-def train_nn_for_all_clusters(surface_data_list, max_epochs=100, patience=5):
+def train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs=100, patience=5):
+    logging.info("Starting Training Neural network")
     # Identify unique clusters in the data
-    unique_clusters = surface_data_list.get_unique_labels()
+    unique_clusters = surface_data_list.get_unique_clusters()
 
     for cluster in unique_clusters:
         # Filter data for the current cluster
@@ -883,45 +941,72 @@ def train_nn_for_all_clusters(surface_data_list, max_epochs=100, patience=5):
         # Define a specific filepath for the model weights for this cluster
         model_weights_filepath = MODEL_WEIGHTS_FILEPATH_TEMPLATE.format(cluster=cluster)
 
-        logging.info(f"Training neural network for cluster {cluster}...")
+        logging.info(f"--------------------Training neural network for cluster {cluster}...")
 
         # Train the neural network on the current cluster's data
         train_neural_network(surface_data_cluster.list, max_epochs, patience, model_weights_filepath)
 
         logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
 
-def save_combined_surface_points_image(original_points_all, processed_points_all, image_save_folder=IMAGE_SAVE_FOLDERPATH):
-    import matplotlib.pyplot as plt
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+from mpl_toolkits.mplot3d import Axes3D
 
-    # Scatter plot for all original points
-    ax.scatter(
-        original_points_all[:, 0], original_points_all[:, 1],
-        color='blue', label='Original Points', alpha=0.5, s=20
-    )
 
-    # Scatter plot for all processed points
-    ax.scatter(
-        processed_points_all[:, 0], processed_points_all[:, 1],
-        color='red', label='Processed Points', alpha=0.5, s=20
-    )
+def save_combined_surface_points_images(original_points_all, processed_points_all,
+                                        image_save_folder=IMAGE_SAVE_FOLDERPATH):
+    # Ensure the image save folder exists
+    os.makedirs(image_save_folder, exist_ok=True)
 
-    # Labels, title, and legend
-    ax.set_title('Surface Points for All Clusters')
-    ax.set_xlabel('X Coordinate')
-    ax.set_ylabel('Y Coordinate')
-    ax.legend()
-    ax.grid(True)
+    # Extract unique time values assuming the last column contains time values
+    unique_times = np.unique(original_points_all[:, 3])
 
-    # Save the plot
-    image_path = os.path.join(image_save_folder, 'combined_surface_points.png')
-    plt.savefig(image_path)
-    plt.close(fig)
+    # Loop through each unique time value
+    for i, time in enumerate(unique_times):
+        # Create a new figure for each time slice
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection='3d')
 
-    print(f"Saved combined surface points image at {image_path}")
+        # Filter original points for this time slice
+        original_points_slice = original_points_all[original_points_all[:, 3] == time]
 
-def load_trained_model(model_weights_filepath, input_size, hidden_size, output_size):
+        # Plot original points for this time slice
+        ax.scatter(original_points_slice[:, 0], original_points_slice[:, 1], original_points_slice[:, 2],
+                   color='blue', label='Original Points', alpha=0.5)
+
+        previous_time = None
+        # Determine the time range for processed points
+        if i == 0:  # If it's the first time, we can't go back
+            processed_points_slice = processed_points_all[processed_points_all[:, 3] == time]
+        else:
+            previous_time = unique_times[i - 1]
+            # Filter processed points that are between previous_time and current time
+            processed_points_slice = processed_points_all[
+                (processed_points_all[:, 3] >= previous_time) &
+                (processed_points_all[:, 3] <= time)
+                ]
+
+        # Plot processed points for this time slice
+        ax.scatter(processed_points_slice[:, 0], processed_points_slice[:, 1], processed_points_slice[:, 2],
+                   color='red', label='Processed Points', alpha=0.5)
+
+        ax.set_xlabel('X Label')
+        ax.set_ylabel('Y Label')
+        ax.set_zlabel('Z Label')
+        ax.set_title(f'3D Visualization of Original and Processed Points from Time {previous_time}_to_{time}')
+        ax.legend()
+
+        # Save the plot for the current time slice
+        image_path = os.path.join(image_save_folder, f'combined_surface_points_time_{previous_time}_to_{time}.png')
+        plt.savefig(image_path)
+        plt.close(fig)
+
+        print(f"Saved combined surface points image at {image_path}")
+
+
+def load_trained_model(model_weights_filepath):
     """
     Loads the trained neural network model weights from a specified file path.
 
@@ -934,46 +1019,194 @@ def load_trained_model(model_weights_filepath, input_size, hidden_size, output_s
     Returns:
         model (nn.Module): The loaded neural network model.
     """
-    # Create an instance of the model
-    model = MLP(input_size, hidden_size, output_size)
+    # Load the checkpoint
+    model = NN_MODEL
+    optimizer = NN_OPTIMIZER
 
-    # Load the model weights
-    model.load_state_dict(torch.load(model_weights_filepath))
+    checkpoint = torch.load(model_weights_filepath)  # Load the checkpoint
+    model.load_state_dict(checkpoint['model_state_dict'])  # Load the model state
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])  # Load the optimizer state
+    epoch = checkpoint['epoch']  # Get the epoch number
+    val_loss = checkpoint['val_loss']  # Get the validation loss
 
     # Set the model to evaluation mode
     model.eval()
 
     return model
 
+
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+
+def visualize_points_with_time(original_points_all, processed_points_all, image_save_folder=IMAGE_SAVE_FOLDERPATH):
+    # Create a new figure for the 3D plot
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Extracting x, y, z coordinates and time from original points
+    original_x = original_points_all[:, 0]
+    original_y = original_points_all[:, 1]
+    original_z = original_points_all[:, 2]
+    original_time = original_points_all[:, 3]  # Assuming the time column is the 4th column
+
+    # Extracting x, y, z coordinates from processed points
+    processed_x = processed_points_all[:, 0]
+    processed_y = processed_points_all[:, 1]
+    processed_z = processed_points_all[:, 2]
+    processed_time = processed_points_all[:, 3]  # Assuming the time column is the 4th column
+
+    # Scatter plot for original points (using time for color)
+    scatter_original = ax.scatter(original_x, original_y, original_z,
+                                  c=original_time, cmap='viridis', label='Original Points', alpha=0.5, s=50)
+
+    # Scatter plot for processed points (using time for color)
+    scatter_processed = ax.scatter(processed_x, processed_y, processed_z,
+                                   c=processed_time, cmap='plasma', label='Processed Points', alpha=0.5, marker='^',
+                                   s=50)
+
+    # Setting labels
+    ax.set_xlabel('X Label')
+    ax.set_ylabel('Y Label')
+    ax.set_zlabel('Z Label')
+    ax.set_title('3D Visualization of Original and Processed Points with Time as Color')
+
+    # Adding a color bar
+    cbar_original = plt.colorbar(scatter_original, ax=ax, pad=0.1)
+    cbar_original.set_label('Time (Original Points)')
+
+    cbar_processed = plt.colorbar(scatter_processed, ax=ax, pad=0.1)
+    cbar_processed.set_label('Time (Processed Points)')
+
+    ax.legend()
+
+    # Save the plot
+    image_path = os.path.join(image_save_folder, 'combined_surface_points_time_colored.png')
+    plt.savefig(image_path)
+    plt.close(fig)
+
+    print(f"Saved combined surface points image at {image_path}")
+
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+from mpl_toolkits.mplot3d import Axes3D
+
+def visualize_original_and_processed_points(original_points_all, processed_points_all, image_save_folder=IMAGE_SAVE_FOLDERPATH):
+    # Ensure the save folder exists
+    os.makedirs(image_save_folder, exist_ok=True)
+
+    # Extracting x, y, z coordinates and time from original points
+    original_x = original_points_all[:, 0]
+    original_y = original_points_all[:, 1]
+    original_z = original_points_all[:, 2]
+    original_time = original_points_all[:, 3]  # Assuming the time column is the 4th column
+
+    # Create a new figure for the original points 3D plot
+    fig_original = plt.figure(figsize=(12, 8))
+    ax_original = fig_original.add_subplot(111, projection='3d')
+
+    # Scatter plot for original points (using time for color)
+    scatter_original = ax_original.scatter(original_x, original_y, original_z,
+                                            c=original_time, cmap='viridis', label='Original Points', alpha=1, s=70)
+
+    # Setting labels
+    ax_original.set_xlabel('X Label')
+    ax_original.set_ylabel('Y Label')
+    ax_original.set_zlabel('Z Label')
+    ax_original.set_title('3D Visualization of Original Points with Time as Color')
+
+    # Adding a color bar for original points
+    cbar_original = plt.colorbar(scatter_original, ax=ax_original, pad=0.1)
+    cbar_original.set_label('Time (Original Points)')
+
+    # Save the original points plot
+    original_image_path = os.path.join(image_save_folder, 'original_surface_points_time_colored.png')
+    plt.savefig(original_image_path)
+    plt.close(fig_original)
+
+    print(f"Saved original surface points image at {original_image_path}")
+
+    # Extracting x, y, z coordinates and time from processed points
+    processed_x = processed_points_all[:, 0]
+    processed_y = processed_points_all[:, 1]
+    processed_z = processed_points_all[:, 2]
+    processed_time = processed_points_all[:, 3]  # Assuming the time column is the 4th column
+
+    # Create a new figure for the processed points 3D plot
+    fig_processed = plt.figure(figsize=(12, 8))
+    ax_processed = fig_processed.add_subplot(111, projection='3d')
+
+    # Scatter plot for processed points (using time for color)
+    scatter_processed = ax_processed.scatter(processed_x, processed_y, processed_z,
+                                              c=processed_time, cmap='plasma', label='Processed Points', alpha=1, s=70)
+
+    # Setting labels
+    ax_processed.set_xlabel('X Label')
+    ax_processed.set_ylabel('Y Label')
+    ax_processed.set_zlabel('Z Label')
+    ax_processed.set_title('3D Visualization of Processed Points with Time as Color')
+
+    # Adding a color bar for processed points
+    cbar_processed = plt.colorbar(scatter_processed, ax=ax_processed, pad=0.1)
+    cbar_processed.set_label('Time (Processed Points)')
+
+    # Save the processed points plot
+    processed_image_path = os.path.join(image_save_folder, 'processed_surface_points_time_colored.png')
+    plt.savefig(processed_image_path)
+    plt.close(fig_processed)
+
+    print(f"Saved processed surface points image at {processed_image_path}")
+
+
+
 def process_and_save_combined_image_for_all_clusters(surface_data_list):
     original_points_all = []
     processed_points_all = []
 
-    unique_clusters = surface_data_list.get_unique_labels()
+    unique_clusters = surface_data_list.get_unique_clusters()
 
     for cluster in unique_clusters:
         # Load the original surface points for the current cluster
         surface_data_cluster = surface_data_list.filter_by_label(cluster)
-        original_points = np.array(surface_data_cluster.list)  # Convert to numpy array if necessary
+
+        # Create a SurfaceDataset instance with the filtered surface data
+        original_points_dataset = SurfaceDataset(surface_data_cluster.list)
 
         # Load the trained model for the current cluster
         model_weights_filepath = MODEL_WEIGHTS_FILEPATH_TEMPLATE.format(cluster=cluster)
         model = load_trained_model(model_weights_filepath)
 
+        # Prepare a DataLoader for original points
+        original_points_loader = DataLoader(original_points_dataset, batch_size=32, shuffle=True)
+
         # Process the original points through the model
+        processed_points = []
         with torch.no_grad():
-            processed_points = model(torch.tensor(original_points, dtype=torch.float32)).numpy()
+            for batch in original_points_loader:
+                inputs = batch[0]  # Get only the points with time
+                inputs = inputs.float()
+
+                outputs = model(inputs)  # Forward pass through the model
+                processed_points.append(outputs)
+
+        # Convert processed points to a single numpy array
+        processed_points = torch.cat(processed_points).numpy()
 
         # Accumulate all original and processed points
-        original_points_all.append(original_points)
+        original_points_all.append(original_points_dataset.data)  # You can store the numpy array directly
         processed_points_all.append(processed_points)
 
     # Convert lists to numpy arrays for plotting
-    original_points_all = np.vstack(original_points_all) if original_points_all else np.empty((0, 2))
-    processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 2))
+    original_points_all = np.vstack(original_points_all) if original_points_all else np.empty((0, 4))
+    processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 4))
 
     # Save the combined image
-    save_combined_surface_points_image(original_points_all, processed_points_all)
+    save_combined_surface_points_images(original_points_all, processed_points_all)
+    visualize_points_with_time(original_points_all, processed_points_all)
+    visualize_original_and_processed_points(original_points_all, processed_points_all)
+
 
 # Main function to orchestrate the processing and training for each cluster
 def main():
@@ -986,15 +1219,18 @@ def main():
 
     # Load the processed surface data list
     surface_data_list = load_pickle_file(SURFACE_DATA_LIST_FILEPATH)
-    if surface_data_list is None:
+    if surface_data_list is None or surface_data_list.list is None or not isinstance(surface_data_list, SurfaceDataList) :
         logging.error("Surface data list could not be loaded. Exiting.")
         return
 
+    print(surface_data_list.get_unique_clusters())
+
     # Train a neural network for each cluster in the data
-    train_nn_for_all_clusters(surface_data_list, max_epochs=100, patience=5)
+    #train_nn_for_all_clusters(surface_data_list, max_epochs=100, patience=5)
 
     # Process and save combined image for all clusters after training
     process_and_save_combined_image_for_all_clusters(surface_data_list)
+
 
 if __name__ == '__main__':
     main()
