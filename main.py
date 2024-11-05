@@ -22,11 +22,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # region Constants
 
 # region relative constants
-EXPORT_FOLDERNAME = "casual"
+EXPORT_FOLDERNAME = "ball"
 PROCESSED_FOLDERPATH = "data-main/processed"
-RAW_DATA_FOLDERPATH = 'data-main/raw/casual_man/'  # Update with the correct path
+RAW_DATA_FOLDERPATH = 'data-main/raw/ball/'  # Update with the correct path
 
-VIZUALIZATION_OBJ_FILEPATH = 'data-main/raw/casual_man/axyz_000001.obj'  # Path to your .obj file
+VIZUALIZATION_OBJ_FILEPATH = 'data-main/raw/ball/ball000.obj'  # Path to your .obj file
 
 # endregion
 
@@ -408,6 +408,46 @@ def get_filepaths_from_json(folder_path, json_file_path):
         meshes_filepaths_list.append(mesh_file_path)
 
     return meshes_filepaths_list
+
+import os
+import json
+import re
+
+def get_file_pairs_from_numbers(folder_path):
+    """
+    Load the file pairs from the JSON file and add the folder path as a prefix.
+
+    Parameters:
+    - folder_path: str, the folder path to be prefixed
+    - json_file_path: str, path to the JSON file
+
+    Returns:
+    - file_pairs_list: list of tuples, each containing a pair of file paths
+    """
+    file_pairs_list = []
+    file_dict = {}
+
+    # Create a dictionary for files based on the numbering before the extension
+    for pair in data['pairs']:
+        mesh_filename = pair['mesh_filename']
+        res_filename = pair['res_filename']
+
+        # Extract the number before the extension
+        match_mesh = re.search(r'(\d+)', mesh_filename)
+        match_res = re.search(r'(\d+)', res_filename)
+
+        if match_mesh and match_res:
+            mesh_number = match_mesh.group(0)
+            res_number = match_res.group(0)
+
+            # Check if the numbers match
+            if mesh_number == res_number:
+                mesh_file_path = os.path.join(folder_path, mesh_filename)
+                res_file_path = os.path.join(folder_path, res_filename)
+                file_pairs_list.append((mesh_file_path, res_file_path))
+
+    return file_pairs_list
+
 
 
 class SurfaceDataList:
@@ -803,7 +843,8 @@ def pipeline_nn_data_prepare(clustered_data):
     center_points_list = clustered_data.points
     cluster_center_labels = clustered_data.labels
 
-    meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
+    #meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
+    meshes_filepaths_list = get_file_pairs_from_numbers(meshes_folder_path)
     logging.info("Creating surface points for all meshes...")
     PUB_surface_data_list = SurfaceDataList([])
     PUB_surface_data_list.create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list,
