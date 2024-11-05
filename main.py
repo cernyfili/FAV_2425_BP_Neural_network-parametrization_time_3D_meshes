@@ -19,51 +19,55 @@ import logging
 # region Constants
 
 # region relative constants
-DATA_FOLDERNAME = "ball"
+data_foldername = "ball"
 
 #----------------
-
-PROCESSED_FOLDERPATH = "data-main/processed"
-RAW_DATA_FOLDER = 'data-main/raw'
-
-RAW_DATA_FOLDERPATH = os.path.join(RAW_DATA_FOLDER, DATA_FOLDERNAME)# Update with the correct path
-
 VIZUALIZATION_OBJ_FILEPATH = 'data-main/raw/ball/ball000.obj'  # Path to your .obj file
+
+
 
 # endregion
 
 
 # region static constants
-MODEL_WEIGHTS_TEMPLATENAME = "model_weights_cluster_{cluster}.pth"
+model_weights_templatename = "model_weights_cluster_{cluster}.pth"
+
+surface_data_list_filename = 'surface_data_list.pkl'
+clustered_data_filename = 'clustered_data.pkl'
+JSON_FILENAME = "center_mesh_pairs.json"
+
+
+raw_data_folderpath = 'data-main/raw'
+
+processed_folderpath = "data-main/processed"
+os.makedirs(processed_folderpath, exist_ok=True)
+
 
 # Get the current date and time in a formatted string
 current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 # Create a folder name based on the current date and time
-timestamped_foldername = f"{DATA_FOLDERNAME}_{current_time_str}"
+timestamped_foldername = f"{data_foldername}_{current_time_str}"
 
-EXPORT_FOLDERPATH = os.path.join(PROCESSED_FOLDERPATH, DATA_FOLDERNAME,timestamped_foldername)
-os.makedirs(EXPORT_FOLDERPATH, exist_ok=True)
+processed_data_folderpath = os.path.join(processed_folderpath, data_foldername)
 
-PROCESSED_DATA_FOLDERPATH = EXPORT_FOLDERPATH
-MODEL_WEIGHTS_FOLDERPATH = EXPORT_FOLDERPATH
-IMAGE_SAVE_FOLDERPATH = EXPORT_FOLDERPATH
-MODEL_WEIGHTS_FILEPATH_TEMPLATE = os.path.join(EXPORT_FOLDERPATH, MODEL_WEIGHTS_TEMPLATENAME)
+processed_session_folderpath = os.path.join(processed_data_folderpath, timestamped_foldername)
+os.makedirs(processed_session_folderpath, exist_ok=True)
 
-SURFACE_DATA_LIST_FILENAME = 'surface_data_list.pkl'
+model_weights_folderpath = processed_session_folderpath
 
-CLUSTERED_DATA_FILENAME = 'clustered_data.pkl'
 
-MODEL_WEIGHTS_FILENAME = 'model_weights.pth'
+
 
 NUM_CLUSTERS = 5
-
 RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 
-JSON_FILENAME = "center_mesh_pairs.json"
 
-SURFACE_DATA_LIST_FILEPATH = os.path.join(PROCESSED_DATA_FOLDERPATH, SURFACE_DATA_LIST_FILENAME)
-CLUSTERED_DATA_FILEPATH = os.path.join(PROCESSED_DATA_FOLDERPATH, CLUSTERED_DATA_FILENAME)
-MODEL_WEIGHTS_FILEPATH = os.path.join(MODEL_WEIGHTS_FOLDERPATH, MODEL_WEIGHTS_FILENAME)
+RAW_DATA_FOLDERPATH = os.path.join(raw_data_folderpath, data_foldername)# Update with the correct path
+IMAGE_SAVE_FOLDERPATH = processed_session_folderpath
+
+SURFACE_DATA_LIST_FILEPATH = os.path.join(processed_data_folderpath, surface_data_list_filename)
+CLUSTERED_DATA_FILEPATH = os.path.join(processed_data_folderpath, clustered_data_filename)
+MODEL_WEIGHTS_FILEPATH_TEMPLATE = os.path.join(model_weights_folderpath, model_weights_templatename)
 
 
 # endregion
@@ -73,7 +77,7 @@ MODEL_WEIGHTS_FILEPATH = os.path.join(MODEL_WEIGHTS_FOLDERPATH, MODEL_WEIGHTS_FI
 # region Logger
 
 # Configure logging for more robust output control
-log_file_path = os.path.join(EXPORT_FOLDERPATH, 'application.log')  # Specify your log file path here
+log_file_path = os.path.join(processed_session_folderpath, 'application.log')  # Specify your log file path here
 
 # Create a logger
 logger = logging.getLogger()
@@ -930,12 +934,11 @@ def pipeline_nn_data_prepare(clustered_data):
 
 
 def save_clustered_data():
-    data_processed_folder_path = PROCESSED_DATA_FOLDERPATH
 
     clustered_data = pipeline_clustered_data_prepare()
 
     # Save the clustered data
-    with open(os.path.join(data_processed_folder_path, CLUSTERED_DATA_FILENAME), 'wb') as f:
+    with open(CLUSTERED_DATA_FILEPATH, 'wb') as f:
         pickle.dump(clustered_data, f)
 
 
@@ -1324,8 +1327,6 @@ def process_and_save_combined_image_for_all_clusters(surface_data_list):
 
 # Main function to orchestrate the processing and training for each cluster
 def main():
-    # Ensure processed data directory exists
-    ensure_directory_exists(PROCESSED_DATA_FOLDERPATH)
 
     # Process clustered and neural network data
     process_clustered_data()
