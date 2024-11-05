@@ -1,0 +1,148 @@
+import logging
+
+from sklearn.model_selection import train_test_split
+
+from nerual_network.model import NNDataset
+from data_processing.mapping import SurfaceDataList
+from utils.constants import MODEL_WEIGHTS_FILEPATH_TEMPLATE, NN_OPTIMIZER, NN_MODEL, NN_BATCH_SIZE
+import torch.nn as nn
+import torch.optim as optim
+
+
+# Restrict access to underscore-prefixed functions
+def __getattr__(name):
+    if name.startswith("_"):
+        raise AttributeError(f"{name} is a private function and cannot be imported.")
+    raise AttributeError(f"Module has no attribute {name}")
+
+# Function to perform one training epoch
+def _train_one_epoch(model, train_loader, criterion, optimizer, device):
+    model.train()  # Set model to training mode
+    train_loss = 0
+    for inputs, targets in train_loader:
+        inputs, targets = inputs.float().to(device), targets.float().to(device)
+
+        # Forward pass
+        outputs = model(inputs)
+        loss = criterion(outputs, targets)
+
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping
+        optimizer.step()
+
+        train_loss += loss.item()
+
+    return train_loss / len(train_loader)  # Return average loss for the epoch
+
+# Main training function with early stopping and scheduler
+def _train_neural_network(data, num_epochs, patience, model_save_path, batch_size):
+    device = _get_device()
+    logging.info(f"Using device: {device}")
+
+    train_loader, val_loader = _create_data_loaders(data, batch_size)
+    model = NN_MODEL
+    criterion = nn.MSELoss()
+    optimizer = NN_OPTIMIZER
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
+
+    best_val_loss = float('inf')
+    epochs_no_improve = 0
+    best_epoch = 0
+
+    for epoch in range(1, num_epochs + 1):
+        # Train and evaluate for one epoch
+        train_loss = _train_one_epoch(model, train_loader, criterion, optimizer, device)
+        val_loss = _evaluate(model, val_loader, criterion, device)
+
+        # Learning rate scheduler step
+        scheduler.step(val_loss)
+
+        logging.info(f"Epoch [{epoch}/{num_epochs}], Train Loss: {train_loss:.10f}, Val Loss: {val_loss:.10f}")
+
+        # Check for early stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_epoch = epoch
+            epochs_no_improve = 0
+            _save_checkpoint(model, optimizer, epoch, best_val_loss, model_save_path)
+        else:
+            epochs_no_improve += 1
+            logging.info(f"No improvement for {epochs_no_improve} epochs")
+
+        if epochs_no_improve >= patience:
+            logging.info(
+                f"Early stopping after {epoch} epochs (Best epoch: {best_epoch} with val loss {best_val_loss:.4f})")
+            break
+
+    logging.info(f"Training completed. Best model saved to {model_save_path}")
+
+# Function to train the neural network for each cluster
+def train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, patience, batch_size):
+    logging.info("Starting Training Neural network")
+    # Identify unique clusters in the data
+    unique_clusters = surface_data_list.get_unique_clusters()
+
+    for cluster in unique_clusters:
+        # Filter data for the current cluster
+        surface_data_cluster = surface_data_list.filter_by_label(cluster)
+
+        # Define a specific filepath for the model weights for this cluster
+        model_weights_filepath = MODEL_WEIGHTS_FILEPATH_TEMPLATE.format(cluster=cluster)
+
+        logging.info(f"--------------------Training neural network for cluster {cluster}...")
+
+        # Train the neural network on the current cluster's data
+        _train_neural_network(surface_data_cluster.list, max_epochs, patience, model_weights_filepath, batch_size)
+
+        logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
+
+# Function to get the appropriate device
+def _get_device():
+    # return torch.device('cuda' if torch.cuda.is_available() else 'cpu') #TODO add GPU compilation support
+    return torch.device('cpu')
+
+
+# Function to split data and create data loaders
+def _create_data_loaders(surface_data_list, batch_size):
+    # Create an instance of SurfaceDataset using the provided surface_data_list
+    dataset = NNDataset(surface_data_list)
+
+    # Split indices for training and validation
+    train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+
+    # Create subsets for training and validation
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset = Subset(dataset, val_indices)
+
+    # Create data loaders for training and validation
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    return train_loader, val_loader
+
+
+# Function to evaluate the model on the validation set
+def _evaluate(model, val_loader, criterion, device):
+    model.eval()  # Set model to evaluation mode
+    val_loss = 0
+    with torch.no_grad():
+        for inputs, targets in val_loader:
+            inputs, targets = inputs.float().to(device), targets.float().to(device)
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            val_loss += loss.item()
+    return val_loss / len(val_loader)  # Return average validation loss
+
+
+# Function to save the model checkpoint
+def _save_checkpoint(model, optimizer, epoch, val_loss, path):
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'val_loss': val_loss,
+    }, path)
+    logging.info(f"Model saved with validation loss {val_loss:.4f} at epoch {epoch}")
+

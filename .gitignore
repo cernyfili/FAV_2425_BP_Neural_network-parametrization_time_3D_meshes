@@ -1,1 +1,6 @@
 .idea
+data
+models
+data-main
+data-main/raw
+data-main/processed
