@@ -5,6 +5,7 @@
 
 import glob
 import pickle
+from datetime import datetime
 from itertools import combinations
 from math import sqrt
 
@@ -15,16 +16,17 @@ from sklearn.cluster import DBSCAN
 import os
 import logging
 
-
-# Configure logging for more robust output control
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 # region Constants
 
 # region relative constants
-EXPORT_FOLDERNAME = "ball"
+DATA_FOLDERNAME = "ball"
+
+#----------------
+
 PROCESSED_FOLDERPATH = "data-main/processed"
-RAW_DATA_FOLDERPATH = 'data-main/raw/ball/'  # Update with the correct path
+RAW_DATA_FOLDER = 'data-main/raw'
+
+RAW_DATA_FOLDERPATH = os.path.join(RAW_DATA_FOLDER, DATA_FOLDERNAME)# Update with the correct path
 
 VIZUALIZATION_OBJ_FILEPATH = 'data-main/raw/ball/ball000.obj'  # Path to your .obj file
 
@@ -34,7 +36,12 @@ VIZUALIZATION_OBJ_FILEPATH = 'data-main/raw/ball/ball000.obj'  # Path to your .o
 # region static constants
 MODEL_WEIGHTS_TEMPLATENAME = "model_weights_cluster_{cluster}.pth"
 
-EXPORT_FOLDERPATH = os.path.join(PROCESSED_FOLDERPATH, EXPORT_FOLDERNAME)
+# Get the current date and time in a formatted string
+current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+# Create a folder name based on the current date and time
+timestamped_foldername = f"{DATA_FOLDERNAME}_{current_time_str}"
+
+EXPORT_FOLDERPATH = os.path.join(PROCESSED_FOLDERPATH, DATA_FOLDERNAME,timestamped_foldername)
 os.makedirs(EXPORT_FOLDERPATH, exist_ok=True)
 
 PROCESSED_DATA_FOLDERPATH = EXPORT_FOLDERPATH
@@ -60,6 +67,41 @@ MODEL_WEIGHTS_FILEPATH = os.path.join(MODEL_WEIGHTS_FOLDERPATH, MODEL_WEIGHTS_FI
 
 
 # endregion
+
+# endregion
+
+# region Logger
+
+# Configure logging for more robust output control
+log_file_path = os.path.join(EXPORT_FOLDERPATH, 'application.log')  # Specify your log file path here
+
+# Create a logger
+logger = logging.getLogger()
+
+# Set the logging level
+logger.setLevel(logging.INFO)
+
+# Create handlers
+console_handler = logging.StreamHandler()  # For console output
+file_handler = logging.FileHandler(log_file_path)  # For file output
+
+# Set the logging level for handlers
+console_handler.setLevel(logging.INFO)
+file_handler.setLevel(logging.INFO)
+
+# Create a formatter
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Add the formatter to the handlers
+console_handler.setFormatter(formatter)
+file_handler.setFormatter(formatter)
+
+# Add the handlers to the logger
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+# Example usage of the logger
+logger.info("Logging has been configured.")
 
 # endregion
 
@@ -413,41 +455,72 @@ import os
 import json
 import re
 
+import os
+import re
+import os
+import re
+
 def get_file_pairs_from_numbers(folder_path):
     """
-    Load the file pairs from the JSON file and add the folder path as a prefix.
+    Get pairs of files from the specified folder based on matching numbers in specific formats.
 
     Parameters:
-    - folder_path: str, the folder path to be prefixed
-    - json_file_path: str, path to the JSON file
+    - folder_path: str, the folder path containing the files.
 
     Returns:
-    - file_pairs_list: list of tuples, each containing a pair of file paths
+    - file_pairs_list: list of tuples, each containing a pair of file paths.
     """
     file_pairs_list = []
-    file_dict = {}
+    files = os.listdir(folder_path)
 
-    # Create a dictionary for files based on the numbering before the extension
-    for pair in data['pairs']:
-        mesh_filename = pair['mesh_filename']
-        res_filename = pair['res_filename']
+    # Create dictionaries to hold the relevant files
+    obj_files = {}
+    res_files = {}
 
-        # Extract the number before the extension
-        match_mesh = re.search(r'(\d+)', mesh_filename)
-        match_res = re.search(r'(\d+)', res_filename)
+    # Categorize files into obj and res based on their naming patterns
+    for filename in files:
+        if filename.endswith('.obj'):
+            match = re.search(r'((\d+)\.)', filename)
+            if match:
+                number = match.group(2)
+                obj_files[number] = filename
+        elif filename.endswith('.xyz') or filename.endswith('.bin'):
+            match = re.search(r'((\d+)\.)', filename)
+            if match:
+                number = match.group(2)
+                res_files[number] = filename
 
-        if match_mesh and match_res:
-            mesh_number = match_mesh.group(0)
-            res_number = match_res.group(0)
+    # Pair the files by matching numbers
+    for number in obj_files:
+        if number in res_files:
+            obj_file_path = os.path.join(folder_path, obj_files[number])
+            res_file_path = os.path.join(folder_path, res_files[number])
+            file_pairs_list.append((obj_file_path, res_file_path))
 
-            # Check if the numbers match
-            if mesh_number == res_number:
-                mesh_file_path = os.path.join(folder_path, mesh_filename)
-                res_file_path = os.path.join(folder_path, res_filename)
-                file_pairs_list.append((mesh_file_path, res_file_path))
-
+    if not file_pairs_list:
+        raise Exception("No data pairs found")
     return file_pairs_list
 
+def get_meshes_list(meshes_folder_path):
+    """
+    Get a list of .obj file paths from the specified folder.
+
+    Parameters:
+    - meshes_folder_path: str, the folder path containing the .obj files.
+
+    Returns:
+    - obj_files_list: list of .obj file paths.
+    """
+    obj_files_list = []
+    files = os.listdir(meshes_folder_path)
+
+    # Select only .obj files
+    for filename in files:
+        if filename.endswith('.obj'):
+            obj_file_path = os.path.join(meshes_folder_path, filename)
+            obj_files_list.append(obj_file_path)
+
+    return obj_files_list
 
 
 class SurfaceDataList:
@@ -844,7 +917,7 @@ def pipeline_nn_data_prepare(clustered_data):
     cluster_center_labels = clustered_data.labels
 
     #meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
-    meshes_filepaths_list = get_file_pairs_from_numbers(meshes_folder_path)
+    meshes_filepaths_list = get_meshes_list(meshes_folder_path)
     logging.info("Creating surface points for all meshes...")
     PUB_surface_data_list = SurfaceDataList([])
     PUB_surface_data_list.create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list,
@@ -1267,7 +1340,7 @@ def main():
     print(surface_data_list.get_unique_clusters())
 
     # Train a neural network for each cluster in the data
-    #train_nn_for_all_clusters(surface_data_list, max_epochs=100, patience=5)
+    train_nn_for_all_clusters(surface_data_list, max_epochs=100, patience=5)
 
     # Process and save combined image for all clusters after training
     process_and_save_combined_image_for_all_clusters(surface_data_list)
