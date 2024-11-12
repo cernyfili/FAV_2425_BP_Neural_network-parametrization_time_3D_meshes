@@ -6,7 +6,6 @@ import numpy as np
 import trimesh
 from matplotlib import pyplot as plt
 from scipy.spatial import KDTree
-import cupy as cp
 
 from utils.helpers import load_pickle_file, get_meshes_list
 
