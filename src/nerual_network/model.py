@@ -15,19 +15,24 @@ class NNDataset(Dataset):
     def __init__(self, surface_data_list: list):
         if surface_data_list is None:
             raise ValueError("surface_data_list must not be None")
+
         self.data = []
         for surface_data in surface_data_list:
             points = np.array(surface_data.points_list)  # Ensure points is a numpy array
             time = np.full((points.shape[0], 1), surface_data.time)
             points_with_time = np.hstack((points, time))
             self.data.append(points_with_time)
-        self.data = np.vstack(self.data)
+
+        self.data = np.vstack(self.data)  # Shape: [total_points, feature_count]
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        return self.data[idx, :], self.data[idx, :]
+        # Separate data based on the target and input requirements
+        targets = self.data[idx, :3]   # First 3 columns as targets
+        inputs = self.data[idx, :4]    # All 4 columns as inputs, including "time" as the last one
+        return inputs, targets
 
 
 class Simple_MLP_01(nn.Module):
@@ -77,7 +82,7 @@ class Simple_MLP_02(nn.Module):
             nn.ReLU(),
             nn.Linear(128, 64),  # Added layer with 64 neurons
             nn.ReLU(),
-            nn.Linear(64, 4)
+            nn.Linear(64, 3)
         )
 
     def forward(self, x):
