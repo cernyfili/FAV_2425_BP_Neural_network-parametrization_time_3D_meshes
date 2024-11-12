@@ -41,6 +41,7 @@ def _load_xyz_files(filepaths):
 def _compute_max_distances_for_all_pairs(data, num_points_in_file):
     max_distances = np.zeros((num_points_in_file, num_points_in_file))  # Array to hold max distances
 
+    size = len(data)
     i = 0
     for file_data in data:
         points = file_data.reshape(-1, 3)  # Reshape row into list of 3D points
@@ -49,7 +50,7 @@ def _compute_max_distances_for_all_pairs(data, num_points_in_file):
             if distance > max_distances[p1, p2]:
                 max_distances[p1, p2] = distance
         i += 1
-        logging.info("computing max distances" + str(i))
+        logging.info("computing max distances " + str(i) + " from " + str(size))
     return max_distances
 
 

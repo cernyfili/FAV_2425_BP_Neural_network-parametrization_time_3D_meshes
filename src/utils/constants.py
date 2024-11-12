@@ -12,7 +12,7 @@ def __getattr__(name):
 
 # region CONSTANTS
 # region Neural network constants
-nn_max_epochs = 1000
+nn_max_epochs = 500
 nn_patience = 5
 nn_batch_size = 64
 
@@ -29,7 +29,6 @@ RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 
 
 # region Data constants
-data_foldername = "ball"
 # endregion
 
 # region Filepaths constants
@@ -50,14 +49,8 @@ os.makedirs(processed_folderpath, exist_ok=True)
 # region public filepaths
 # RAW_DATA_FOLDERPATH = os.path.join(raw_data_folderpath, data_foldername)  # Update with the correct path
 # IMAGE_SAVE_FOLDERPATH = processed_session_folderpath
-current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-# Create a folder name based on the current date and time
-timestamped_foldername = f"{data_foldername}_{current_time_str}"
-processed_data_folderpath = os.path.join(processed_folderpath, data_foldername)
-processed_session_folderpath = os.path.join(processed_data_folderpath, timestamped_foldername)
-os.makedirs(processed_session_folderpath, exist_ok=True)
 
-LOG_FILE_FILEPATH = os.path.join(processed_session_folderpath, log_file_filename)  # Specify your log file path here
+LOG_FILE_FILEPATH = os.path.join(processed_folderpath, log_file_filename)  # Specify your log file path here
 
 
 #
@@ -93,6 +86,16 @@ class NNConfig:
 
 class FilePathConfig:
     def __init__(self, data_foldername):
+        current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Create a folder name based on the current date and time
+        timestamped_foldername = f"{data_foldername}_{current_time_str}"
+        processed_data_folderpath = os.path.join(processed_folderpath, data_foldername)
+        processed_session_folderpath = os.path.join(processed_data_folderpath, timestamped_foldername)
+        os.makedirs(processed_session_folderpath, exist_ok=True)
+
+        global LOG_FILE_FILEPATH
+        LOG_FILE_FILEPATH = os.path.join(processed_folderpath, log_file_filename)  # Specify your log file path here
+
         self.raw_data_folderpath = os.path.join(raw_data_folderpath, data_foldername)
         self.image_save_folderpath = os.path.join(processed_session_folderpath)
         self.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)
@@ -128,5 +131,5 @@ DEFAULT_NN_CONFIG = NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patienc
                              nn_model=nn_model, nn_optimizer=nn_optimizer)
 
 DEFAULT_TRAIN_CONFIG = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
-                                   file_path_config=FilePathConfig(data_foldername=data_foldername),
+                                   file_path_config=FilePathConfig(data_foldername="default"),
                                    num_clusters=num_clusters, num_surface_points=num_surface_points)

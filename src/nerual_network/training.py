@@ -188,3 +188,4 @@ def train_nn_for_object(train_config: TrainConfig):
                                                      train_config.file_path_config.model_weights_template,
                                                      train_config.file_path_config.point_cloud_original_filename,
                                                      train_config.file_path_config.point_cloud_processed_filename)
+    logging.info("------------------TRAINING ENDED------------------")

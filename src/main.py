@@ -1,6 +1,9 @@
 # Main function to orchestrate the processing and training for each cluster
 from nerual_network.training import train_nn_for_object
+from src.data_processing.mapping import SurfaceDataList
 from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig, DEFAULT_NN_CONFIG
+
+
 
 
 # def train_nn_for_object(num_clusters, num_surface_points, nn_max_epochs, nn_patience, nn_batch_size, raw_data_folderpath):
@@ -33,8 +36,8 @@ from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig, D
 #     process_and_save_combined_image_for_all_clusters(surface_data_list)
 
 def main():
-    #data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
-    data_folders = ["ball"]
+    #data_folders = [ "vr_take", "casual_man_1000", "casual_man_4000"]
+    data_folders = ["casual_man_1000"]
 
     for data_foldername in data_folders:
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
