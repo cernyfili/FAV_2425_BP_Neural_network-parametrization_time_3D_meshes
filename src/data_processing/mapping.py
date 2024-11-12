@@ -125,24 +125,57 @@ def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, n
     :param mesh:
     """
 
-    mesh_vertices = cp.asarray(mesh.vertices)
-    mesh_faces = cp.asarray(mesh.faces)
-    clustered_points = cp.asarray(clustered_points)
-    cluster_labels = cp.asarray(cluster_labels)
-
+    mesh_vertices = mesh.vertices
+    mesh_faces = mesh.faces
     # Generate random points on the surface of the mesh
     surface_points = _generate_random_points_on_mesh(mesh_vertices, mesh_faces, num_surface_points)
 
     # Build a KDTree for the clustered points
-    kdtree = KDTree(cp.asnumpy(clustered_points))
+    kdtree = KDTree(clustered_points)
 
     # Find the closest clustered point for each surface point
-    _, indices = kdtree.query(cp.asnumpy(surface_points))
+    _, indices = kdtree.query(surface_points)
 
     # Assign the cluster label of the closest point to the surface point
     surface_labels = cluster_labels[indices]
 
     return surface_points, surface_labels
+#
+# def _create_categorized_surface_points_graphics(mesh, clustered_points, cluster_labels, num_surface_points):
+#     """
+#     Categorize random points on the surface of a mesh based on the closest point inside the mesh.
+#
+#     Parameters:
+#     - mesh_vertices: np.ndarray of shape (n_vertices, 3)
+#     - mesh_faces: np.ndarray of shape (n_faces, 3)
+#     - clustered_points: np.ndarray of shape (n_clustered_points, 3)
+#     - cluster_labels: np.ndarray of shape (n_clustered_points,)
+#     - num_surface_points: int, number of random points to generate on the surface
+#
+#     Returns:
+#     - surface_points: np.ndarray of shape (num_surface_points, 3)
+#     - surface_labels: np.ndarray of shape (num_surface_points,)
+#     :param mesh:
+#     """
+#
+#     mesh_vertices = cp.asarray(mesh.vertices)
+#     mesh_faces = cp.asarray(mesh.faces)
+#     clustered_points = cp.asarray(clustered_points)
+#     cluster_labels = cp.asarray(cluster_labels)
+#
+#     # Generate random points on the surface of the mesh
+#     surface_points = _generate_random_points_on_mesh(mesh_vertices, mesh_faces, num_surface_points)
+#
+#     # Build a KDTree for the clustered points
+#     kdtree = KDTree(cp.asnumpy(clustered_points))
+#
+#     # Find the closest clustered point for each surface point
+#     _, indices = kdtree.query(cp.asnumpy(surface_points))
+#
+#     # Assign the cluster label of the closest point to the surface point
+#     surface_labels = cluster_labels[indices]
+#
+#     return surface_points, surface_labels
 
 def _assign_time_to_surfaces(surface_data_list):
     """Assign a time index to each surface data item if not already assigned."""
@@ -252,7 +285,6 @@ def _save_surface_data(clustered_data, num_surface_points, meshes_folder_path,
     # save the surface data list
     with open(surface_data_filepath, 'wb') as f:
         pickle.dump(surface_data_list, f)
-
 def _generate_random_points_on_mesh(vertices, faces, num_points):
     """
     Generate random points on the surface of a mesh.
@@ -268,14 +300,14 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
 
     # Compute the area of each face
     def triangle_area(v0, v1, v2):
-        return 0.5 * cp.linalg.norm(cp.cross(v1 - v0, v2 - v0))
+        return 0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0))
 
-    areas = cp.array([triangle_area(vertices[f[0]], vertices[f[1]], vertices[f[2]]) for f in faces])
-    total_area = cp.sum(areas)
+    areas = np.array([triangle_area(vertices[f[0]], vertices[f[1]], vertices[f[2]]) for f in faces])
+    total_area = np.sum(areas)
     areas /= total_area
 
     # Select faces based on their area
-    face_indices = cp.random.choice(len(faces), size=num_points, p=areas)
+    face_indices = np.random.choice(len(faces), size=num_points, p=areas)
 
     # Generate random points on the selected faces
     points = []
@@ -288,7 +320,44 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
         point = (1 - r1 - r2) * v0 + r1 * v1 + r2 * v2
         points.append(point)
 
-    return cp.array(points)
+    return np.array(points)
+#
+# def _generate_random_points_on_mesh_graphics(vertices, faces, num_points):
+#     """
+#     Generate random points on the surface of a mesh.
+#
+#     Parameters:
+#     - vertices: np.ndarray of shape (n_vertices, 3)
+#     - faces: np.ndarray of shape (n_faces, 3)
+#     - num_points: int, number of random points to generate
+#
+#     Returns:
+#     - points: np.ndarray of shape (num_points, 3)
+#     """
+#
+#     # Compute the area of each face
+#     def triangle_area(v0, v1, v2):
+#         return 0.5 * cp.linalg.norm(cp.cross(v1 - v0, v2 - v0))
+#
+#     areas = cp.array([triangle_area(vertices[f[0]], vertices[f[1]], vertices[f[2]]) for f in faces])
+#     total_area = cp.sum(areas)
+#     areas /= total_area
+#
+#     # Select faces based on their area
+#     face_indices = cp.random.choice(len(faces), size=num_points, p=areas)
+#
+#     # Generate random points on the selected faces
+#     points = []
+#     for i in face_indices:
+#         f = faces[i]
+#         v0, v1, v2 = vertices[f[0]], vertices[f[1]], vertices[f[2]]
+#         r1, r2 = np.random.rand(2)
+#         if r1 + r2 > 1:
+#             r1, r2 = 1 - r1, 1 - r2
+#         point = (1 - r1 - r2) * v0 + r1 * v1 + r2 * v2
+#         points.append(point)
+#
+#     return cp.array(points)
 
 
 # region visulization
