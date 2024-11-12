@@ -1,6 +1,7 @@
 # Main function to orchestrate the processing and training for each cluster
 from nerual_network.training import train_nn_for_object
-from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig
+from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig, DEFAULT_NN_CONFIG
+
 
 # def train_nn_for_object(num_clusters, num_surface_points, nn_max_epochs, nn_patience, nn_batch_size, raw_data_folderpath):
 #
@@ -36,7 +37,7 @@ def main():
     data_folders = ["ball"]
 
     for data_foldername in data_folders:
-        train_config = TrainConfig(nn_config=DEFAULT_TRAIN_CONFIG,
+        train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername=data_foldername))
         train_nn_for_object(train_config)
 

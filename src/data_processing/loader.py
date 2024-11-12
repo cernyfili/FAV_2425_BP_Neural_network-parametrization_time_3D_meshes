@@ -6,7 +6,7 @@ from itertools import combinations
 import numpy as np
 from sklearn.cluster import DBSCAN
 
-from utils.constants import RAW_DATA_ALLOWED_FILETYPES_LIST
+from src.utils.constants import RAW_DATA_ALLOWED_FILETYPES_LIST
 
 
 # Restrict access to underscore-prefixed functions

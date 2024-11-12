@@ -7,7 +7,7 @@ import trimesh
 from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fcluster, linkage
 
-from data_processing.loader import load_data
+from src.data_processing.loader import load_data
 
 
 # Restrict access to underscore-prefixed functions

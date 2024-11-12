@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from nerual_network.model import Simple_MLP_02
+from src.nerual_network.model import Simple_MLP_02
 import torch.optim as optim
 
 
@@ -41,8 +41,8 @@ log_file_filename = 'application.log'
 point_cloud_original_filename = "original_points_all.csv"
 point_cloud_processed_filename = "processed_points_all.csv"
 
-raw_data_folderpath = 'data/raw'
-processed_folderpath = "data/processed"
+raw_data_folderpath = '..\\data\\raw'
+processed_folderpath = "..\\data\\processed"
 os.makedirs(processed_folderpath, exist_ok=True)
 # endregion
 

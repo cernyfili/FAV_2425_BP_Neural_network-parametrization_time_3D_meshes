@@ -1,11 +1,12 @@
 import os
 
 import numpy as np
+import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 
-from nerual_network.model import NNDataset
-from utils.constants import nn_optimizer, nn_model
+from src.utils.constants import nn_optimizer, nn_model
+from src.nerual_network.model import NNDataset
 
 
 # Restrict access to underscore-prefixed functions

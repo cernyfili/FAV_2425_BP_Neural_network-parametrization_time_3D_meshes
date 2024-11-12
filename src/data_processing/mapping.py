@@ -7,7 +7,7 @@ import trimesh
 from matplotlib import pyplot as plt
 from scipy.spatial import KDTree
 
-from utils.helpers import load_pickle_file, get_meshes_list
+from src.utils.helpers import load_pickle_file, get_meshes_list
 
 
 # Restrict access to underscore-prefixed functions
@@ -320,7 +320,8 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
         points.append(point)
 
     return np.array(points)
-#
+#todo graphics max distance computing
+
 # def _generate_random_points_on_mesh_graphics(vertices, faces, num_points):
 #     """
 #     Generate random points on the surface of a mesh.
