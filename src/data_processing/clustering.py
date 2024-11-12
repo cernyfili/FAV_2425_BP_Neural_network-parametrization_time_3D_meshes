@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fcluster, linkage
 
 from data_processing.loader import load_data
-from utils.constants import CLUSTERED_DATA_FILEPATH, NUM_CLUSTERS, RAW_DATA_FOLDERPATH
+
 
 # Restrict access to underscore-prefixed functions
 def __getattr__(name):
@@ -26,16 +26,16 @@ class ClusteredData:
         return self.points[time_step].reshape(-1, 3)
 
 
-def _save_clustered_data(num_clusters):
+def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath):
 
-    clustered_data = _pipeline_clustered_data_prepare(num_clusters)
+    clustered_data = _pipeline_clustered_data_prepare(num_clusters, raw_data_folderpath)
 
     # Save the clustered data
-    with open(CLUSTERED_DATA_FILEPATH, 'wb') as f:
+    with open(clustered_data_filepath, 'wb') as f:
         pickle.dump(clustered_data, f)
 
-def _pipeline_clustered_data_prepare(num_clusters):
-    folder_path_meshes = RAW_DATA_FOLDERPATH
+def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes):
+
     max_distances, center_points_list = load_data(folder_path_meshes)
 
     cluster_center_labels = _hierarchical_clustering_from_precomputed_distances(max_distances, n_clusters=num_clusters)
@@ -108,9 +108,9 @@ def _hierarchical_cluster_data(folder_path, obj_file_path, file_type, num_cluste
 
 
 # Function to process and save clustered data if not already processed
-def process_clustered_data(num_clusters):
-    if not os.path.exists(CLUSTERED_DATA_FILEPATH):
-        _save_clustered_data(num_clusters)
+def process_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath):
+    if not os.path.exists(clustered_data_filepath):
+        _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath)
         logging.info("Clustered data processed and saved.")
     else:
         logging.info("Clustered data already processed.")

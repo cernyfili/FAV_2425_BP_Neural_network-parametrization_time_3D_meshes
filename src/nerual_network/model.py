@@ -1,6 +1,3 @@
-# region Neural network
-# region Data preparation
-
 import torch.nn as nn
 
 
@@ -10,12 +7,10 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
-# create surface points for all meshes
 
-
-class MLP(nn.Module):
+class Simple_MLP_01(nn.Module):
     def __init__(self):
-        super(MLP, self).__init__()
+        super(Simple_MLP_01, self).__init__()
         self.encoder = nn.Sequential(nn.Linear(4, 64), nn.ReLU(), nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 2))
         self.decoder = nn.Sequential(nn.Linear(3, 32), nn.ReLU(), nn.Linear(32, 64), nn.ReLU(), nn.Linear(64, 4))
 
@@ -26,12 +21,22 @@ class MLP(nn.Module):
         decoded_output = self.decoder(encoded_with_time)
         return decoded_output
 
-# endregion
-# region Neural network training
 
+class Simple_MLP_02(nn.Module):
+    def __init__(self):
+        super(Simple_MLP_02, self).__init__()
+        # self.encoder = nn.Sequential(nn.Linear(4, 64), nn.ReLU(), nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 2))
+        # change the encoder so it has one more layer and max number of neruons is 512
+        self.encoder = nn.Sequential(nn.Linear(4, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(), nn.Linear(256, 128),
+                                     nn.ReLU(), nn.Linear(128, 2))
+        # self.decoder = nn.Sequential(nn.Linear(3, 32), nn.ReLU(), nn.Linear(32, 64), nn.ReLU(), nn.Linear(64, 3))
+        # change the decoder so it has one more layer and max number of neruons is 512
+        self.decoder = nn.Sequential(nn.Linear(3, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU(), nn.Linear(256, 128),
+                                     nn.ReLU(), nn.Linear(128, 3))
 
-
-
-
-# endregion
-# endregion
+    def forward(self, x):
+        time_value = x[:, 3].unsqueeze(1)  # Extract time value and keep it as a column vector
+        encoded_features = self.encoder(x)
+        encoded_with_time = torch.cat((encoded_features, time_value), dim=1)  # Concatenate encoded features with time
+        decoded_output = self.decoder(encoded_with_time)
+        return decoded_output

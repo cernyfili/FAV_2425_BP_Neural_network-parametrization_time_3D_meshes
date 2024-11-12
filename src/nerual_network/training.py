@@ -1,12 +1,15 @@
 import logging
 
-from sklearn.model_selection import train_test_split
-
-from nerual_network.model import NNDataset
-from data_processing.mapping import SurfaceDataList
-from utils.constants import MODEL_WEIGHTS_FILEPATH_TEMPLATE, NN_OPTIMIZER, NN_MODEL, NN_BATCH_SIZE
 import torch.nn as nn
 import torch.optim as optim
+from sklearn.model_selection import train_test_split
+
+from data_processing.clustering import process_clustered_data
+from data_processing.mapping import SurfaceDataList, process_surface_data
+from nerual_network.evaluation import process_and_save_combined_image_for_all_clusters
+from nerual_network.model import NNDataset
+from utils.constants import nn_optimizer, nn_model, TrainConfig
+from utils.helpers import load_pickle_file
 
 
 # Restrict access to underscore-prefixed functions
@@ -17,6 +20,7 @@ def __getattr__(name):
 
 # Function to perform one training epoch
 def _train_one_epoch(model, train_loader, criterion, optimizer, device):
+    model.to(device)
     model.train()  # Set model to training mode
     train_loss = 0
     for inputs, targets in train_loader:
@@ -42,9 +46,9 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
     logging.info(f"Using device: {device}")
 
     train_loader, val_loader = _create_data_loaders(data, batch_size)
-    model = NN_MODEL
+    model = nn_model
     criterion = nn.MSELoss()
-    optimizer = NN_OPTIMIZER
+    optimizer = nn_optimizer
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
 
     best_val_loss = float('inf')
@@ -79,7 +83,7 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
     logging.info(f"Training completed. Best model saved to {model_save_path}")
 
 # Function to train the neural network for each cluster
-def train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, patience, batch_size):
+def train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, patience, batch_size, model_weights_template):
     logging.info("Starting Training Neural network")
     # Identify unique clusters in the data
     unique_clusters = surface_data_list.get_unique_clusters()
@@ -89,7 +93,7 @@ def train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, pa
         surface_data_cluster = surface_data_list.filter_by_label(cluster)
 
         # Define a specific filepath for the model weights for this cluster
-        model_weights_filepath = MODEL_WEIGHTS_FILEPATH_TEMPLATE.format(cluster=cluster)
+        model_weights_filepath = model_weights_template.format(cluster=cluster)
 
         logging.info(f"--------------------Training neural network for cluster {cluster}...")
 
@@ -100,8 +104,8 @@ def train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, pa
 
 # Function to get the appropriate device
 def _get_device():
-    # return torch.device('cuda' if torch.cuda.is_available() else 'cpu') #TODO add GPU compilation support
-    return torch.device('cpu')
+    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #return torch.device('cpu')
 
 
 # Function to split data and create data loaders
@@ -146,3 +150,25 @@ def _save_checkpoint(model, optimizer, epoch, val_loss, path):
     }, path)
     logging.info(f"Model saved with validation loss {val_loss:.4f} at epoch {epoch}")
 
+
+def train_nn_for_object(train_config: TrainConfig):
+    logging.info("------------------TRAINING STARTED------------------")
+    logging.info(f"Number of clusters: {train_config.num_clusters}")
+    logging.info(f"Number of surface points: {train_config.num_surface_points}")
+    logging.info(f"Maximum number of epochs: {train_config.nn_config.nn_max_epochs}")
+    logging.info(f"Patience for early stopping: {train_config.nn_config.nn_patience}")
+    logging.info(f"Batch size: {train_config.nn_config.nn_batch_size}")
+    logging.info(f"Raw data folder: {train_config.file_path_config.raw_data_folderpath}")
+
+    process_clustered_data(train_config.num_clusters, train_config.file_path_config.raw_data_folderpath, train_config.file_path_config.clustered_data_filepath)
+    process_surface_data(train_config.num_surface_points, train_config.file_path_config.raw_data_folderpath, train_config.file_path_config.surface_data_filepath, train_config.file_path_config.clustered_data_filepath)
+
+    surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
+    if surface_data_list is None or surface_data_list.list is None or not isinstance(surface_data_list, SurfaceDataList):
+        logging.error("Surface data list could not be loaded. Exiting.")
+        return
+
+    train_nn_for_all_clusters(surface_data_list, max_epochs=train_config.nn_config.nn_max_epochs, patience=train_config.nn_config.nn_patience,
+                              batch_size=train_config.nn_config.nn_batch_size, model_weights_template=train_config.file_path_config.model_weights_template)
+    process_and_save_combined_image_for_all_clusters(surface_data_list, train_config.file_path_config.image_save_folderpath, train_config.file_path_config.model_weights_template,
+                                                     train_config.file_path_config.point_cloud_original_filename, train_config.file_path_config.point_cloud_processed_filename)

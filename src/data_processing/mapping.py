@@ -6,9 +6,8 @@ import numpy as np
 import trimesh
 from matplotlib import pyplot as plt
 from scipy.spatial import KDTree
+import cupy as cp
 
-from utils.constants import CLUSTERED_DATA_FILEPATH, SURFACE_DATA_LIST_FILEPATH, RAW_DATA_FOLDERPATH, JSON_FILENAME, \
-    NUM_SURFACE_POINTS
 from utils.helpers import load_pickle_file, get_meshes_list
 
 
@@ -126,16 +125,19 @@ def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, n
     :param mesh:
     """
 
-    mesh_vertices = mesh.vertices
-    mesh_faces = mesh.faces
+    mesh_vertices = cp.asarray(mesh.vertices)
+    mesh_faces = cp.asarray(mesh.faces)
+    clustered_points = cp.asarray(clustered_points)
+    cluster_labels = cp.asarray(cluster_labels)
+
     # Generate random points on the surface of the mesh
     surface_points = _generate_random_points_on_mesh(mesh_vertices, mesh_faces, num_surface_points)
 
     # Build a KDTree for the clustered points
-    kdtree = KDTree(clustered_points)
+    kdtree = KDTree(cp.asnumpy(clustered_points))
 
     # Find the closest clustered point for each surface point
-    _, indices = kdtree.query(surface_points)
+    _, indices = kdtree.query(cp.asnumpy(surface_points))
 
     # Assign the cluster label of the closest point to the surface point
     surface_labels = cluster_labels[indices]
@@ -230,11 +232,8 @@ def _prepare_surface_data(meshes_filepaths_list, center_points_list, cluster_cen
     return surface_data_list
 
 
-def _pipeline_prepare_surface_data(clustered_data, num_surface_points):
-    meshes_folder_path = RAW_DATA_FOLDERPATH
-    json_file_name = JSON_FILENAME
+def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path):
 
-    json_file_path = meshes_folder_path + json_file_name
     center_points_list = clustered_data.points
     cluster_center_labels = clustered_data.labels
 
@@ -246,11 +245,12 @@ def _pipeline_prepare_surface_data(clustered_data, num_surface_points):
     logging.info("Surface points created and normalized.")
     return surface_data_list
 
-def _save_surface_data(clustered_data, num_surface_points):
-    surface_data_list = _pipeline_prepare_surface_data(clustered_data, num_surface_points)
+def _save_surface_data(clustered_data, num_surface_points, meshes_folder_path,
+                       surface_data_filepath):
+    surface_data_list = _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path)
 
     # save the surface data list
-    with open(SURFACE_DATA_LIST_FILEPATH, 'wb') as f:
+    with open(surface_data_filepath, 'wb') as f:
         pickle.dump(surface_data_list, f)
 
 def _generate_random_points_on_mesh(vertices, faces, num_points):
@@ -268,14 +268,14 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
 
     # Compute the area of each face
     def triangle_area(v0, v1, v2):
-        return 0.5 * np.linalg.norm(np.cross(v1 - v0, v2 - v0))
+        return 0.5 * cp.linalg.norm(cp.cross(v1 - v0, v2 - v0))
 
-    areas = np.array([triangle_area(vertices[f[0]], vertices[f[1]], vertices[f[2]]) for f in faces])
-    total_area = np.sum(areas)
+    areas = cp.array([triangle_area(vertices[f[0]], vertices[f[1]], vertices[f[2]]) for f in faces])
+    total_area = cp.sum(areas)
     areas /= total_area
 
     # Select faces based on their area
-    face_indices = np.random.choice(len(faces), size=num_points, p=areas)
+    face_indices = cp.random.choice(len(faces), size=num_points, p=areas)
 
     # Generate random points on the selected faces
     points = []
@@ -288,7 +288,7 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
         point = (1 - r1 - r2) * v0 + r1 * v1 + r2 * v2
         points.append(point)
 
-    return np.array(points)
+    return cp.array(points)
 
 
 # region visulization
@@ -327,11 +327,11 @@ def _visualize_surface_points(points, labels):
 
 
 # Function to process and save neural network data if not already processed
-def process_surface_data(num_surface_points):
-    if not os.path.exists(SURFACE_DATA_LIST_FILEPATH):
-        clustered_data = load_pickle_file(CLUSTERED_DATA_FILEPATH)
+def process_surface_data(num_surface_points, meshes_folder_path, surface_data_filepath, clustered_data_filepath):
+    if not os.path.exists(surface_data_filepath):
+        clustered_data = load_pickle_file(clustered_data_filepath)
         if clustered_data is not None:
-            _save_surface_data(clustered_data, num_surface_points)
+            _save_surface_data(clustered_data, num_surface_points, meshes_folder_path, surface_data_filepath)
             logging.info("Neural network data processed and saved.")
     else:
         logging.info("Neural network data already processed.")
