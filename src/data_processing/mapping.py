@@ -19,8 +19,9 @@ def __getattr__(name):
 
 
 class SurfaceDataList:
-    def __init__(self, surface_data_list : list):
-        if not isinstance(surface_data_list, list) or not all(isinstance(item, SurfaceData) for item in surface_data_list):
+    def __init__(self, surface_data_list: list):
+        if not isinstance(surface_data_list, list) or not all(
+                isinstance(item, SurfaceData) for item in surface_data_list):
             raise TypeError("All items in surface_data_list must be instances of SurfaceData")
         self.list = surface_data_list
         # Initialize unique_clusters at creation
@@ -102,10 +103,15 @@ class SurfaceDataList:
 
 
 class SurfaceData:
+    """
+    Class to represents points in object for one cluster and for a single time step.
+    """
+
     def __init__(self, surface_points, surface_labels, time):
         self.points_list = surface_points
         self.labels_list = surface_labels
         self.time = time
+
 
 #
 # def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, num_surface_points):
@@ -177,6 +183,7 @@ def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, n
 
     return surface_points, surface_labels
 
+
 def _assign_time_to_surfaces(surface_data_list):
     """Assign a time index to each surface data item if not already assigned."""
     for i, surface_data in enumerate(surface_data_list.list):
@@ -185,52 +192,45 @@ def _assign_time_to_surfaces(surface_data_list):
 
         surface_data.time = i
 
+
 def _normalize(surface_data_list):
+    # todo test if it is working
     """
     Normalize the surface points for all objects in the list.
-    it will normalize the data to the range [0, 1] for each axis.
-    and shifts the data to the origin of 0, 0, 0
-    :return:  normalized_surface_points: SurfaceDataList
+    Normalize the data to the range [0, 1] for each axis and shift it to the origin (0, 0, 0).
+    :return: normalized_surface_points: SurfaceDataList
     """
+    import numpy as np
 
-    def normalize_time(time, length):
-        length = length - 1
-        new_time = time / length
-        return new_time
+    def normalize_time(surface_data_list):
+        total_length = len(surface_data_list.list) - 1
+        for surface_data in surface_data_list.list:
+            surface_data.time /= total_length
 
-    def scale_object_points(object_points, norm):
-        return object_points / norm
+    def compute_shift_and_scale(surface_data_list):
+        # Combine all points for faster computation
+        all_points = np.vstack([surface_data.points_list for surface_data in surface_data_list.list])
+        min_corner = np.min(all_points, axis=0)
+        max_corner = np.max(all_points, axis=0)
+        shift_vector = (min_corner + max_corner) / 2
+        max_norm = np.linalg.norm(all_points - shift_vector, axis=1).max()
+        return shift_vector, max_norm
 
-    def shift_object_points_to_origin(object_points, shift_vector):
-        return object_points - shift_vector
+    def shift_and_scale_points(surface_data_list, shift_vector, max_norm):
+        for surface_data in surface_data_list.list:
+            surface_data.points_list = (surface_data.points_list - shift_vector) / max_norm
 
-    def normalize_object_points(object_points, norm, shift_vector):
-        object_points = shift_object_points_to_origin(object_points, shift_vector)
-        #todo vypocitat max_norm tady po posunuti
-        object_points = scale_object_points(object_points, norm)
-        return object_points
+    # Normalize time for each object
+    normalize_time(surface_data_list)
 
-    # Calculate the bounding box for all objects combined
-    all_points = np.vstack([surface_data.points_list for surface_data in surface_data_list.list])
-    min_corner = np.min(all_points, axis=0)
-    #todo stred bounidng box
-    shift_vector = min_corner  # Shift all objects to the position of the minimum corner
+    # Compute the shift vector and max norm
+    shift_vector, max_norm = compute_shift_and_scale(surface_data_list)
 
-    # Calculate the maximum norm of all points across all axes for each object
-    max_norm = max(
-        #todo bug axis 0
-        np.linalg.norm(surface_data_element.points_list, ord=None, axis=None).max() for surface_data_element in
-        surface_data_list.list)
+    # Shift points to origin and scale
+    shift_and_scale_points(surface_data_list, shift_vector, max_norm)
 
-    normalized_surface_points = SurfaceDataList([])
-    for surface_data in surface_data_list.list:
-        logging.info("Normalizing surface points for time step " + str(surface_data.time))
-        normalized_time = normalize_time(surface_data.time, len(surface_data_list.list))
-        normalized_points = normalize_object_points(surface_data.points_list, max_norm, shift_vector)
-        normalized_surface_points.append(
-            SurfaceData(normalized_points, surface_data.labels_list, normalized_time))
+    return surface_data_list
 
-    surface_data_list.list = normalized_surface_points.list
 
 def _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list, cluster_center_labels,
                                           num_surface_points):
@@ -256,11 +256,12 @@ def _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_l
 
     return surface_data_list
 
-def _prepare_surface_data(meshes_filepaths_list, center_points_list, cluster_center_labels, num_surface_points):
 
+def _prepare_surface_data(meshes_filepaths_list, center_points_list, cluster_center_labels, num_surface_points):
     logging.info("Creating surface points for all meshes...")
-    surface_data_list = _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list, cluster_center_labels,
-                                          num_surface_points)
+    surface_data_list = _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list,
+                                                              cluster_center_labels,
+                                                              num_surface_points)
 
     _assign_time_to_surfaces(surface_data_list)
     _normalize(surface_data_list)
@@ -269,17 +270,17 @@ def _prepare_surface_data(meshes_filepaths_list, center_points_list, cluster_cen
 
 
 def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path):
-
     center_points_list = clustered_data.points
     cluster_center_labels = clustered_data.labels
 
-    #meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
+    # meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
     meshes_filepaths_list = get_meshes_list(meshes_folder_path)
     logging.info("Creating surface points for all meshes...")
     surface_data_list = _prepare_surface_data(meshes_filepaths_list, center_points_list,
                                               cluster_center_labels, num_surface_points)
     logging.info("Surface points created and normalized.")
     return surface_data_list
+
 
 def _save_surface_data(clustered_data, num_surface_points, meshes_folder_path,
                        surface_data_filepath):
@@ -288,6 +289,8 @@ def _save_surface_data(clustered_data, num_surface_points, meshes_folder_path,
     # save the surface data list
     with open(surface_data_filepath, 'wb') as f:
         pickle.dump(surface_data_list, f)
+
+
 # def _generate_random_points_on_mesh(vertices, faces, num_points):
 #     """
 #     Generate random points on the surface of a mesh.
@@ -324,9 +327,10 @@ def _save_surface_data(clustered_data, num_surface_points, meshes_folder_path,
 #         points.append(point)
 #
 #     return np.array(points)
-#todo graphics max distance computing
+# todo graphics max distance computing
 
 def _generate_random_points_on_mesh(vertices, faces, num_points):
+    #todo check if it is working
     """
     Generate random points on the surface of a mesh.
 
@@ -339,29 +343,32 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
     - points: np.ndarray of shape (num_points, 3)
     """
 
-    # Compute the area of each face
-    def triangle_area(v0, v1, v2):
-        return 0.5 * cp.linalg.norm(cp.cross(v1 - v0, v2 - v0))
-
-    areas = cp.array([triangle_area(vertices[f[0]], vertices[f[1]], vertices[f[2]]) for f in faces])
+    # Compute the area of each face using vectorized operations
+    v0 = vertices[faces[:, 0]]
+    v1 = vertices[faces[:, 1]]
+    v2 = vertices[faces[:, 2]]
+    cross_products = cp.cross(v1 - v0, v2 - v0)
+    areas = 0.5 * cp.linalg.norm(cross_products, axis=1)
     total_area = cp.sum(areas)
-    areas /= total_area
+    probabilities = areas / total_area
 
     # Select faces based on their area
-    face_indices = cp.random.choice(len(faces), size=num_points, p=areas)
+    face_indices = cp.random.choice(len(faces), size=num_points, p=probabilities)
 
-    # Generate random points on the selected faces
-    points = []
-    for i in face_indices:
-        f = faces[i]
-        v0, v1, v2 = vertices[f[0]], vertices[f[1]], vertices[f[2]]
-        r1, r2 = np.random.rand(2)
-        if r1 + r2 > 1:
-            r1, r2 = 1 - r1, 1 - r2
-        point = (1 - r1 - r2) * v0 + r1 * v1 + r2 * v2
-        points.append(point)
+    # Generate random barycentric coordinates
+    r1 = cp.random.rand(num_points)
+    r2 = cp.random.rand(num_points)
+    mask = r1 + r2 > 1
+    r1[mask], r2[mask] = 1 - r1[mask], 1 - r2[mask]
 
-    return cp.array(points)
+    # Compute points on the selected faces
+    selected_faces = faces[face_indices]
+    v0 = vertices[selected_faces[:, 0]]
+    v1 = vertices[selected_faces[:, 1]]
+    v2 = vertices[selected_faces[:, 2]]
+    points = (1 - r1 - r2)[:, None] * v0 + r1[:, None] * v1 + r2[:, None] * v2
+
+    return points
 
 
 # region visulization
@@ -403,10 +410,10 @@ def _visualize_surface_points(points, labels):
 def process_surface_data(num_surface_points, meshes_folder_path, surface_data_filepath, clustered_data_filepath):
     if not os.path.exists(surface_data_filepath):
         clustered_data = load_pickle_file(clustered_data_filepath)
-        if clustered_data is not None:
-            _save_surface_data(clustered_data, num_surface_points, meshes_folder_path, surface_data_filepath)
-            logging.info("Neural network data processed and saved.")
+        if clustered_data is None:
+            logging.error("Clustered data could not be loaded. Exiting.")
+            return
+        _save_surface_data(clustered_data, num_surface_points, meshes_folder_path, surface_data_filepath)
+        logging.info("Neural network data processed and saved.")
     else:
         logging.info("Neural network data already processed.")
-
-

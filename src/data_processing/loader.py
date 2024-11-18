@@ -38,19 +38,34 @@ def _load_xyz_files(filepaths):
     # Function to compute max distances between pairs of points across time
 
 
-def _compute_max_distances_for_all_pairs(data, num_points_in_file):
-    max_distances = np.zeros((num_points_in_file, num_points_in_file))  # Array to hold max distances
+def compute_max_distances_for_all_pairs(data, num_points_in_file):
+    """
+    Compute the maximum pairwise distances for all points in each file.
+
+    Parameters:
+    - data: List of arrays, each containing 3D point data for a file
+    - num_points_in_file: int, number of points in each file
+
+    Returns:
+    - max_distances: np.ndarray of shape (num_points_in_file, num_points_in_file)
+    """
+
+    max_distances = np.zeros((num_points_in_file, num_points_in_file))
 
     size = len(data)
-    i = 0
-    for file_data in data:
-        points = file_data.reshape(-1, 3)  # Reshape row into list of 3D points
-        for p1, p2 in combinations(range(num_points_in_file), 2):
-            distance = _euclidean_distance(points[p1], points[p2])
-            if distance > max_distances[p1, p2]:
-                max_distances[p1, p2] = distance
-        i += 1
-        logging.info("computing max distances " + str(i) + " from " + str(size))
+    for i, file_data in enumerate(data):
+        # Reshape row into list of 3D points
+        points = file_data.reshape(-1, 3)
+
+        # Compute pairwise distances using broadcasting
+        diff = points[:, None, :] - points[None, :, :]  # Pairwise differences
+        distances = np.sqrt(np.sum(diff**2, axis=-1))  # Pairwise Euclidean distances
+
+        # Update max distances
+        max_distances = np.maximum(max_distances, distances)
+
+        logging.info(f"Computing max distances {i + 1} of {size}")
+
     return max_distances
 
 
@@ -132,12 +147,4 @@ def load_data(folder_path):
     else:
         raise ValueError("Invalid file type. Use 'xyz' or 'bin'.")
 
-    # Compute the maximum distances between points
-    max_distances = _compute_max_distances_for_all_pairs(data, points_in_file)
-    logging.info("Max distances computed between all pairs of points.")
-
-    # if max_distances is empty
-    if not max_distances.any():
-        raise ValueError("No data loaded or max distances computed.")
-
-    return max_distances, data
+    return data, points_in_file

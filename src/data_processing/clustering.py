@@ -7,7 +7,7 @@ import trimesh
 from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fcluster, linkage
 
-from src.data_processing.loader import load_data
+from src.data_processing.loader import load_data, compute_max_distances_for_all_pairs
 
 
 # Restrict access to underscore-prefixed functions
@@ -36,7 +36,8 @@ def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filep
 
 def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes):
 
-    max_distances, center_points_list = load_data(folder_path_meshes)
+    center_points_list, points_in_file = load_data(folder_path_meshes)
+    max_distances = compute_max_distances_for_all_pairs(center_points_list, points_in_file)
 
     cluster_center_labels = _hierarchical_clustering_from_precomputed_distances(max_distances, n_clusters=num_clusters)
     clustered_data = ClusteredData(center_points_list, cluster_center_labels)
@@ -90,20 +91,6 @@ def _hierarchical_clustering_from_precomputed_distances(distances, n_clusters=4,
     z = linkage(condensed_distances, method=method)
     labels = fcluster(z, n_clusters, criterion='maxclust')
     return labels
-
-
-def _hierarchical_cluster_data(folder_path, obj_file_path, file_type, num_clusters=2):
-    max_distances, data = load_data(folder_path)
-    # Perform hierarchical clustering using precomputed distances
-
-    labels = _hierarchical_clustering_from_precomputed_distances(max_distances, n_clusters=num_clusters)
-    logging.info("Hierarchical clustering completed.")
-    # Select points from a specific time step (for example, the first time step)
-    points = data[0].reshape(-1, 3)  # Reshape into list of 3D points
-
-    # Visualize the clusters on the 3D model
-
-    _visualize_clusters_with_mesh(points, labels, obj_file_path)
 
 
 

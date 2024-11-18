@@ -183,6 +183,7 @@ def train_nn_for_object(train_config: TrainConfig):
                               patience=train_config.nn_config.nn_patience,
                               batch_size=train_config.nn_config.nn_batch_size,
                               model_weights_template=train_config.file_path_config.model_weights_template)
+
     process_and_save_combined_image_for_all_clusters(surface_data_list,
                                                      train_config.file_path_config.image_save_folderpath,
                                                      train_config.file_path_config.model_weights_template,
