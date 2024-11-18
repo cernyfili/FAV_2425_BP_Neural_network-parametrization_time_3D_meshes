@@ -22,6 +22,7 @@ nn_optimizer = optim.Adam(nn_model.parameters(), lr=0.001)
 
 # region Data processing constants
 num_clusters = 5
+
 num_surface_points = 1000
 
 RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']

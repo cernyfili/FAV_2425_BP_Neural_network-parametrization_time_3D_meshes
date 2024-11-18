@@ -2,6 +2,7 @@ import logging
 import os
 import pickle
 
+import cupy as cp
 import numpy as np
 import trimesh
 from matplotlib import pyplot as plt
@@ -205,16 +206,19 @@ def _normalize(surface_data_list):
 
     def normalize_object_points(object_points, norm, shift_vector):
         object_points = shift_object_points_to_origin(object_points, shift_vector)
+        #todo vypocitat max_norm tady po posunuti
         object_points = scale_object_points(object_points, norm)
         return object_points
 
     # Calculate the bounding box for all objects combined
     all_points = np.vstack([surface_data.points_list for surface_data in surface_data_list.list])
     min_corner = np.min(all_points, axis=0)
+    #todo stred bounidng box
     shift_vector = min_corner  # Shift all objects to the position of the minimum corner
 
     # Calculate the maximum norm of all points across all axes for each object
     max_norm = max(
+        #todo bug axis 0
         np.linalg.norm(surface_data_element.points_list, ord=None, axis=None).max() for surface_data_element in
         surface_data_list.list)
 

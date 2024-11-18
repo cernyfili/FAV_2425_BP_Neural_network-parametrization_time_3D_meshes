@@ -7,7 +7,7 @@
       <excludeFolder url="file://$MODULE_DIR$/models" />
       <excludeFolder url="file://$MODULE_DIR$/data" />
     </content>
-    <orderEntry type="jdk" jdkName="cernyfilip-env" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="C:\tools\Anaconda3" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
