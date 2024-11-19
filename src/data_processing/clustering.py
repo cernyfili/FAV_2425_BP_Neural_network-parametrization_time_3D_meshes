@@ -53,7 +53,7 @@ def visualize_clusters(points, labels, image_save_folder, image_name):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=labels, cmap='jet', s=50)
+    scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=labels / np.max(labels), cmap='jet', s=50)
     plt.colorbar(scatter)
 
     ax.set_xlabel('X')
