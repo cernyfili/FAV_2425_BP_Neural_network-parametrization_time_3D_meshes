@@ -18,7 +18,8 @@ class NNDataset(Dataset):
 
         self.data = []
         for surface_data in surface_data_list:
-            points = np.array(surface_data.points_list)  # Ensure points is a numpy array
+            points = surface_data.points_list
+            points = np.array(points)
             time = np.full((points.shape[0], 1), surface_data.time)
             points_with_time = np.hstack((points, time))
             self.data.append(points_with_time)

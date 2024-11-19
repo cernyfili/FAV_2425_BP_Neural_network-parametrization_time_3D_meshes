@@ -1,3 +1,4 @@
+import logging
 import os
 
 import numpy as np
@@ -5,8 +6,10 @@ import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 
-from src.utils.constants import nn_optimizer, nn_model
+from data_processing.mapping import SurfaceDataList
+from src.utils.constants import nn_optimizer, nn_model, TrainConfig
 from src.nerual_network.model import NNDataset
+from utils.helpers import load_pickle_file
 
 
 # Restrict access to underscore-prefixed functions
@@ -17,17 +20,28 @@ def __getattr__(name):
 
 
 def _save_pointcloud_to_file(original_points_all, processed_points_all, original_filepath, processed_filepath):
-
     np.savetxt(original_filepath, original_points_all, delimiter=",")
     np.savetxt(processed_filepath, processed_points_all, delimiter=",")
 
 
-def process_and_save_combined_image_for_all_clusters(surface_data_list, images_save_folderpath, model_weights_template, point_cloud_original_filepath, point_cloud_processed_filepath):
-    original_points_all, processed_points_all = _prepare_export_data(surface_data_list, model_weights_template)
+def evaluate(train_config: TrainConfig):
+    surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
+    if surface_data_list is None or surface_data_list.list is None or not isinstance(surface_data_list,
+                                                                                     SurfaceDataList):
+        logging.error("Surface data list could not be loaded. Exiting.")
+        return
+    images_save_folderpath = train_config.file_path_config.images_save_folderpath,
+    model_weights_template = train_config.file_path_config.model_weights_template,
+    point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath,
+    point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
+    batch_size = train_config.nn_config.batch_size
 
+    original_points_all, processed_points_all = _prepare_export_data(surface_data_list, model_weights_template,
+                                                                     batch_size)
 
     # Save the combined image
-    _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath, point_cloud_processed_filepath)
+    _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
+                             point_cloud_processed_filepath)
 
     _visualize_combined_surface_points_images(original_points_all, processed_points_all, images_save_folderpath)
     _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
@@ -80,6 +94,7 @@ def _visualize_combined_surface_points_images(original_points_all, processed_poi
         plt.close(fig)
 
         print(f"Saved combined surface points image at {image_path}")
+
 
 def _visualize_points_with_time(original_points_all, processed_points_all, image_save_folder):
     """
@@ -135,6 +150,7 @@ def _visualize_points_with_time(original_points_all, processed_points_all, image
     plt.close(fig)
 
     print(f"Saved combined surface points image at {image_path}")
+
 
 def _visualize_original_and_processed_points(original_points_all, processed_points_all, image_save_folder):
     """
@@ -210,7 +226,7 @@ def _visualize_original_and_processed_points(original_points_all, processed_poin
     print(f"Saved processed surface points image at {processed_image_path}")
 
 
-def _prepare_export_data(surface_data_list, model_weights_template):
+def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
     original_points_all = []
     processed_points_all = []
     unique_clusters = surface_data_list.get_unique_clusters()
@@ -226,7 +242,7 @@ def _prepare_export_data(surface_data_list, model_weights_template):
         model = _load_trained_model(model_weights_filepath)
 
         # Prepare a DataLoader for original points
-        original_points_loader = DataLoader(original_points_dataset, batch_size=32, shuffle=True)
+        original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=True)
 
         # Process the original points through the model
         processed_points = []
@@ -249,7 +265,6 @@ def _prepare_export_data(surface_data_list, model_weights_template):
     processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 4))
 
     processed_points_all = np.hstack((processed_points_all, original_points_all[:, 3].reshape(-1, 1)))
-
 
     return original_points_all, processed_points_all
 

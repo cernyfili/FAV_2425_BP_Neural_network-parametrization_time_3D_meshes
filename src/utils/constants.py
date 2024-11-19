@@ -12,7 +12,7 @@ def __getattr__(name):
 
 # region CONSTANTS
 # region Neural network constants
-nn_max_epochs = 500
+nn_max_epochs = 2000
 nn_patience = 5
 nn_batch_size = 64
 
@@ -23,7 +23,7 @@ nn_optimizer = optim.Adam(nn_model.parameters(), lr=0.001)
 # region Data processing constants
 num_clusters = 5
 
-num_surface_points = 1000
+num_surface_points = 3000
 
 RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 # endregion
@@ -51,6 +51,7 @@ os.makedirs(processed_folderpath, exist_ok=True)
 # RAW_DATA_FOLDERPATH = os.path.join(raw_data_folderpath, data_foldername)  # Update with the correct path
 # IMAGE_SAVE_FOLDERPATH = processed_session_folderpath
 
+#default
 LOG_FILE_FILEPATH = os.path.join(processed_folderpath, log_file_filename)  # Specify your log file path here
 
 
@@ -72,17 +73,17 @@ LOG_FILE_FILEPATH = os.path.join(processed_folderpath, log_file_filename)  # Spe
 # region DATA STRUCTURES
 class NNConfig:
     def __init__(self, nn_max_epochs: int, nn_patience: int, nn_batch_size: int, nn_model, nn_optimizer):
-        self.nn_max_epochs = nn_max_epochs
-        self.nn_patience = nn_patience
-        self.nn_batch_size = nn_batch_size
-        self.nn_model = nn_model
-        self.nn_optimizer = nn_optimizer
+        self.max_epochs = nn_max_epochs
+        self.patience = nn_patience
+        self.batch_size = nn_batch_size
+        self.model = nn_model
+        self.optimizer = nn_optimizer
 
     def __str__(self):
-        return f"NNConfig(nn_max_epochs={self.nn_max_epochs}, nn_patience={self.nn_patience}, nn_batch_size={self.nn_batch_size}, nn_model={self.nn_model}, nn_optimizer={self.nn_optimizer})"
+        return f"NNConfig(nn_max_epochs={self.max_epochs}, nn_patience={self.patience}, nn_batch_size={self.batch_size}, nn_model={self.model}, nn_optimizer={self.optimizer})"
 
     def __repr__(self):
-        return f"NNConfig(nn_max_epochs={self.nn_max_epochs}, nn_patience={self.nn_patience}, nn_batch_size={self.nn_batch_size}, nn_model={self.nn_model}, nn_optimizer={self.nn_optimizer})"
+        return f"NNConfig(nn_max_epochs={self.max_epochs}, nn_patience={self.patience}, nn_batch_size={self.batch_size}, nn_model={self.model}, nn_optimizer={self.optimizer})"
 
 
 class FilePathConfig:
@@ -95,21 +96,21 @@ class FilePathConfig:
         os.makedirs(processed_session_folderpath, exist_ok=True)
 
         global LOG_FILE_FILEPATH
-        LOG_FILE_FILEPATH = os.path.join(processed_folderpath, log_file_filename)  # Specify your log file path here
+        LOG_FILE_FILEPATH = os.path.join(processed_session_folderpath, log_file_filename)  # Specify your log file path here
 
         self.raw_data_folderpath = os.path.join(raw_data_folderpath, data_foldername)
-        self.image_save_folderpath = os.path.join(processed_session_folderpath)
+        self.images_save_folderpath = os.path.join(processed_session_folderpath)
         self.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)
         self.clustered_data_filepath = os.path.join(processed_data_folderpath, clustered_data_filename)
         self.model_weights_template = os.path.join(processed_session_folderpath, model_weights_templatename)
-        self.point_cloud_original_filename = os.path.join(processed_session_folderpath, point_cloud_original_filename)
-        self.point_cloud_processed_filename = os.path.join(processed_session_folderpath, point_cloud_processed_filename)
+        self.point_cloud_original_filepath = os.path.join(processed_session_folderpath, point_cloud_original_filename)
+        self.point_cloud_processed_filepath = os.path.join(processed_session_folderpath, point_cloud_processed_filename)
 
     def __str__(self):
-        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.image_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_template}, point_cloud_original_filename={self.point_cloud_original_filename}, point_cloud_processed_filename={self.point_cloud_processed_filename})"
+        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_template}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
 
     def __repr__(self):
-        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.image_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_template}, point_cloud_original_filename={self.point_cloud_original_filename}, point_cloud_processed_filename={self.point_cloud_processed_filename})"
+        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_template}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
 
 
 class TrainConfig:

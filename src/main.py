@@ -1,4 +1,7 @@
 # Main function to orchestrate the processing and training for each cluster
+import logging
+
+from nerual_network.evaluation import evaluate
 from nerual_network.training import train_nn_for_object
 from src.data_processing.mapping import SurfaceDataList
 from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig, DEFAULT_NN_CONFIG
@@ -37,12 +40,15 @@ from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig, D
 
 def main():
     #data_folders = [ "vr_take", "casual_man_1000", "casual_man_4000"]
-    data_folders = ["casual_man_1000"]
+    data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
 
     for data_foldername in data_folders:
+        logging.info("---------------------START OBJECT-------------------")
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername=data_foldername))
         train_nn_for_object(train_config)
+        evaluate(train_config)
+        logging.info("---------------------END OBJECT-------------------")
 
 if __name__ == '__main__':
     main()

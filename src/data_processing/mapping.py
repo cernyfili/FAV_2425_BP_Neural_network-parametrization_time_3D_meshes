@@ -2,7 +2,6 @@ import logging
 import os
 import pickle
 
-import cupy as cp
 import numpy as np
 import trimesh
 from matplotlib import pyplot as plt
@@ -33,9 +32,9 @@ class SurfaceDataList:
         """
         unique_clusters = set()
         for surface_data in self.list:
-            unique_clusters.update(surface_data.labels_list)
+            unique_clusters.update(
+                int(label) for label in surface_data.labels_list)  # Convert each sub-array to a tuple
         return unique_clusters
-
     def get_unique_clusters(self):
         """
         Return the set of unique clusters.
@@ -164,24 +163,26 @@ def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, n
     :param mesh:
     """
 
-    mesh_vertices = cp.asarray(mesh.vertices)
-    mesh_faces = cp.asarray(mesh.faces)
-    clustered_points = cp.asarray(clustered_points)
-    cluster_labels = cp.asarray(cluster_labels)
+    # Extract mesh vertices and faces as NumPy arrays
+    mesh_vertices = np.array(mesh.vertices)
+    mesh_faces = np.array(mesh.faces)
+    clustered_points = np.array(clustered_points)
+    cluster_labels = np.array(cluster_labels)
 
     # Generate random points on the surface of the mesh
     surface_points = _generate_random_points_on_mesh(mesh_vertices, mesh_faces, num_surface_points)
 
     # Build a KDTree for the clustered points
-    kdtree = KDTree(cp.asnumpy(clustered_points))
+    kdtree = KDTree(clustered_points)
 
     # Find the closest clustered point for each surface point
-    _, indices = kdtree.query(cp.asnumpy(surface_points))
+    _, indices = kdtree.query(surface_points)
 
     # Assign the cluster label of the closest point to the surface point
     surface_labels = cluster_labels[indices]
 
-    return surface_points, surface_labels
+    # Return as NumPy arrays
+    return np.array(surface_points), np.array(surface_labels)
 
 
 def _assign_time_to_surfaces(surface_data_list):
@@ -347,17 +348,17 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
     v0 = vertices[faces[:, 0]]
     v1 = vertices[faces[:, 1]]
     v2 = vertices[faces[:, 2]]
-    cross_products = cp.cross(v1 - v0, v2 - v0)
-    areas = 0.5 * cp.linalg.norm(cross_products, axis=1)
-    total_area = cp.sum(areas)
+    cross_products = np.cross(v1 - v0, v2 - v0)
+    areas = 0.5 * np.linalg.norm(cross_products, axis=1)
+    total_area = np.sum(areas)
     probabilities = areas / total_area
 
     # Select faces based on their area
-    face_indices = cp.random.choice(len(faces), size=num_points, p=probabilities)
+    face_indices = np.random.choice(len(faces), size=num_points, p=probabilities)
 
     # Generate random barycentric coordinates
-    r1 = cp.random.rand(num_points)
-    r2 = cp.random.rand(num_points)
+    r1 = np.random.rand(num_points)
+    r2 = np.random.rand(num_points)
     mask = r1 + r2 > 1
     r1[mask], r2[mask] = 1 - r1[mask], 1 - r2[mask]
 

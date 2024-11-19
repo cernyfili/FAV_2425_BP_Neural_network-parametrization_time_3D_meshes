@@ -8,7 +8,7 @@ from torch.utils.data import Subset, DataLoader
 
 from src.data_processing.clustering import process_clustered_data
 from src.data_processing.mapping import SurfaceDataList, process_surface_data
-from src.nerual_network.evaluation import process_and_save_combined_image_for_all_clusters
+from src.nerual_network.evaluation import evaluate
 from src.nerual_network.model import NNDataset
 from src.utils.constants import nn_optimizer, nn_model, TrainConfig
 from src.utils.helpers import load_pickle_file
@@ -162,9 +162,9 @@ def train_nn_for_object(train_config: TrainConfig):
     logging.info("------------------TRAINING STARTED------------------")
     logging.info(f"Number of clusters: {train_config.num_clusters}")
     logging.info(f"Number of surface points: {train_config.num_surface_points}")
-    logging.info(f"Maximum number of epochs: {train_config.nn_config.nn_max_epochs}")
-    logging.info(f"Patience for early stopping: {train_config.nn_config.nn_patience}")
-    logging.info(f"Batch size: {train_config.nn_config.nn_batch_size}")
+    logging.info(f"Maximum number of epochs: {train_config.nn_config.max_epochs}")
+    logging.info(f"Patience for early stopping: {train_config.nn_config.patience}")
+    logging.info(f"Batch size: {train_config.nn_config.batch_size}")
     logging.info(f"Raw data folder: {train_config.file_path_config.raw_data_folderpath}")
 
     process_clustered_data(train_config.num_clusters, train_config.file_path_config.raw_data_folderpath,
@@ -179,14 +179,8 @@ def train_nn_for_object(train_config: TrainConfig):
         logging.error("Surface data list could not be loaded. Exiting.")
         return
 
-    train_nn_for_all_clusters(surface_data_list, max_epochs=train_config.nn_config.nn_max_epochs,
-                              patience=train_config.nn_config.nn_patience,
-                              batch_size=train_config.nn_config.nn_batch_size,
+    train_nn_for_all_clusters(surface_data_list, max_epochs=train_config.nn_config.max_epochs,
+                              patience=train_config.nn_config.patience,
+                              batch_size=train_config.nn_config.batch_size,
                               model_weights_template=train_config.file_path_config.model_weights_template)
-
-    process_and_save_combined_image_for_all_clusters(surface_data_list,
-                                                     train_config.file_path_config.image_save_folderpath,
-                                                     train_config.file_path_config.model_weights_template,
-                                                     train_config.file_path_config.point_cloud_original_filename,
-                                                     train_config.file_path_config.point_cloud_processed_filename)
     logging.info("------------------TRAINING ENDED------------------")
