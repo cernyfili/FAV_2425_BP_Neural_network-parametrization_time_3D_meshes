@@ -41,7 +41,7 @@ def main():
 
     #data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
 
-    data_folders = ["ball"]
+    data_folders = ["ball_test"]
 
     for data_foldername in data_folders:
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,

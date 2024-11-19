@@ -54,7 +54,7 @@ def evaluate(train_config: TrainConfig):
     _visualize_all_clusters_for_each_time(surface_data_list, images_save_folderpath)
 
 
-def _visualize_all_clusters_for_each_time(surface_data_list, image_save_folder):
+def _visualize_all_clusters_for_each_time(surface_data_list : SurfaceDataList, image_save_folder):
     """
     Visualizes the original and processed points in 3D in one image for each time slice.
     :param original_points_all:
@@ -73,9 +73,10 @@ def _visualize_all_clusters_for_each_time(surface_data_list, image_save_folder):
         surface_data_slice = surface_data_list.filter_by_time(time)
         cluster_labels = surface_data_slice.get_cluster_labels()
         # transfrom surface_data_slice to array with points
-        surface_data_slice = np.array([point.get_point() for point in surface_data_slice.list])
+
+        points_slice = np.array([])#todo
         # transform cluster_labels to array
-        cluster_labels = np.array([label[0] for label in cluster_labels])
+        cluster_labels = np.array(cluster_labels)
         _visualize_clusters(surface_data_slice, cluster_labels, image_save_folder, f'time_{i}_clusters_time.png')
 
 def _visualize_for_each_time(original_points_all, processed_points_all,
@@ -341,30 +342,56 @@ def _load_trained_model(model_weights_filepath):
     return model
 
 
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+
 def _visualize_clusters(points, labels, image_save_folder, image_name):
+    """
+    Visualizes 3D points with cluster labels in distinct colors.
+
+    Parameters:
+    - points: np.ndarray of shape (N, 3), where N is the number of points.
+    - labels: np.ndarray of shape (N,), cluster labels for each point.
+    - image_save_folder: str, folder path to save the image.
+    - image_name: str, name of the image file.
+    """
+    # Check input shapes
+    if points.shape[1] != 3:
+        raise ValueError(f"Expected points with shape (N, 3), got {points.shape}")
+    if points.shape[0] != labels.shape[0]:
+        raise ValueError(f"Number of points ({points.shape[0]}) must match number of labels ({labels.shape[0]})")
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    normalized_labels = labels / np.max(labels)
-    scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=normalized_labels, cmap='jet', s=50)
-    plt.colorbar(scatter)
+    # Generate distinct colors for each cluster
+    unique_labels = np.unique(labels)
+    colormap = plt.get_cmap('jet')
+    colors = colormap(np.linspace(0, 1, len(unique_labels)))
 
+    # Map labels to colors
+    label_to_color = {label: colors[i] for i, label in enumerate(unique_labels)}
+    point_colors = np.array([label_to_color[label] for label in labels])
+
+    # Create scatter plot
+    scatter = ax.scatter(
+        points[:, 0], points[:, 1], points[:, 2],
+        c=point_colors, s=50
+    )
+
+    # Set axis labels
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
-    #
-    # # rotate the axes and update
-    # for angle in range(0, 360):
-    #     ax.view_init(30, angle)
-    #     plt.draw()
-    #     plt.pause(.001)
 
     # Set the initial view angle
-    ax.view_init(elev=-70, azim=90)  # Change these values to rotate
+    ax.view_init(elev=-70, azim=90)  # Adjust these values as needed
 
+    # Set plot title
     plt.title("3D Clusters with Mesh")
 
+    # Save the image
     image_path = os.path.join(image_save_folder, image_name)
     plt.savefig(image_path)
     plt.close(fig)
