@@ -58,6 +58,7 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
     best_val_loss = float('inf')
     epochs_no_improve = 0
     best_epoch = 0
+    best_checkpoint = None
 
     for epoch in range(1, num_epochs + 1):
         # Train and evaluate for one epoch
@@ -74,16 +75,18 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
             best_val_loss = val_loss
             best_epoch = epoch
             epochs_no_improve = 0
-            _save_checkpoint(model, optimizer, epoch, best_val_loss, model_save_path)
+            best_checkpoint = _save_checkpoint(model, optimizer, epoch, best_val_loss)
         else:
             epochs_no_improve += 1
             logging.info(f"No improvement for {epochs_no_improve} epochs")
 
         if epochs_no_improve >= patience:
+
             logging.info(
                 f"Early stopping after {epoch} epochs (Best epoch: {best_epoch} with val loss {best_val_loss:.4f})")
             break
 
+    torch.save(best_checkpoint, model_save_path)
     logging.info(f"Training completed. Best model saved to {model_save_path}")
 
 
@@ -148,14 +151,15 @@ def _evaluate(model, val_loader, criterion, device):
 
 
 # Function to save the model checkpoint
-def _save_checkpoint(model, optimizer, epoch, val_loss, path):
-    torch.save({
+def _save_checkpoint(model, optimizer, epoch, val_loss):
+    logging.info(f"Model saved with validation loss {val_loss:.4f} at epoch {epoch}")
+    return {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'val_loss': val_loss,
-    }, path)
-    logging.info(f"Model saved with validation loss {val_loss:.4f} at epoch {epoch}")
+    }
+
 
 
 def train_nn_for_object(train_config: TrainConfig):
@@ -182,5 +186,5 @@ def train_nn_for_object(train_config: TrainConfig):
     train_nn_for_all_clusters(surface_data_list, max_epochs=train_config.nn_config.max_epochs,
                               patience=train_config.nn_config.patience,
                               batch_size=train_config.nn_config.batch_size,
-                              model_weights_template=train_config.file_path_config.model_weights_template)
+                              model_weights_template=train_config.file_path_config.model_weights_folderpath)
     logging.info("------------------TRAINING ENDED------------------")

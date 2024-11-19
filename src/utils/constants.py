@@ -87,12 +87,13 @@ class NNConfig:
 
 
 class FilePathConfig:
-    def __init__(self, data_foldername):
+    def __init__(self, data_foldername, processed_session_folderpath=None):
         current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         # Create a folder name based on the current date and time
         timestamped_foldername = f"{data_foldername}_{current_time_str}"
         processed_data_folderpath = os.path.join(processed_folderpath, data_foldername)
-        processed_session_folderpath = os.path.join(processed_data_folderpath, timestamped_foldername)
+        if processed_session_folderpath is None:
+            processed_session_folderpath = os.path.join(processed_data_folderpath, timestamped_foldername)
         os.makedirs(processed_session_folderpath, exist_ok=True)
 
         global LOG_FILE_FILEPATH
@@ -102,15 +103,15 @@ class FilePathConfig:
         self.images_save_folderpath = os.path.join(processed_session_folderpath)
         self.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)
         self.clustered_data_filepath = os.path.join(processed_data_folderpath, clustered_data_filename)
-        self.model_weights_template = os.path.join(processed_session_folderpath, model_weights_templatename)
+        self.model_weights_folderpath = os.path.join(processed_session_folderpath, model_weights_templatename)
         self.point_cloud_original_filepath = os.path.join(processed_session_folderpath, point_cloud_original_filename)
         self.point_cloud_processed_filepath = os.path.join(processed_session_folderpath, point_cloud_processed_filename)
 
     def __str__(self):
-        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_template}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
+        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_folderpath}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
 
     def __repr__(self):
-        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_template}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
+        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_folderpath}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
 
 
 class TrainConfig:

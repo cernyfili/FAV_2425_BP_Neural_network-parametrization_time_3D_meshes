@@ -31,7 +31,7 @@ def evaluate(train_config: TrainConfig):
         logging.error("Surface data list could not be loaded. Exiting.")
         return
     images_save_folderpath = train_config.file_path_config.images_save_folderpath,
-    model_weights_template = train_config.file_path_config.model_weights_template,
+    model_weights_template = train_config.file_path_config.model_weights_folderpath,
     point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath,
     point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
     batch_size = train_config.nn_config.batch_size
