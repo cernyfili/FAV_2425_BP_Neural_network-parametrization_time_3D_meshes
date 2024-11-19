@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 
 from data_processing.mapping import SurfaceDataList
+from nerual_network.training import get_device
 from src.utils.constants import nn_optimizer, nn_model, TrainConfig
 from src.nerual_network.model import NNDataset
 from utils.helpers import load_pickle_file
@@ -240,6 +241,7 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
         # Load the trained model for the current cluster
         model_weights_filepath = model_weights_template.format(cluster=cluster)
         model = _load_trained_model(model_weights_filepath)
+        model.to(get_device())
 
         # Prepare a DataLoader for original points
         original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=True)

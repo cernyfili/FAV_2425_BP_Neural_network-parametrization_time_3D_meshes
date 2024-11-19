@@ -46,7 +46,7 @@ def _train_one_epoch(model, train_loader, criterion, optimizer, device):
 
 # Main training function with early stopping and scheduler
 def _train_neural_network(data, num_epochs, patience, model_save_path, batch_size):
-    device = _get_device()
+    device = get_device()
     logging.info(f"Using device: {device}")
 
     train_loader, val_loader = _create_data_loaders(data, batch_size)
@@ -113,7 +113,7 @@ def _train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, p
 
 
 # Function to get the appropriate device
-def _get_device():
+def get_device():
     return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # return torch.device('cpu')
 
