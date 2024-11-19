@@ -6,10 +6,10 @@ import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 
-from data_processing.mapping import SurfaceDataList, convert_to_surface_data_list
-from nerual_network.training import get_device
-from src.utils.constants import nn_optimizer, nn_model, TrainConfig
+from data_processing.mapping import SurfaceDataList
 from src.nerual_network.model import NNDataset
+from src.utils.constants import nn_optimizer, nn_model, TrainConfig
+from utils.constants import NN_DEVICE
 from utils.helpers import load_pickle_file
 
 
@@ -74,10 +74,10 @@ def _visualize_all_clusters_for_each_time(surface_data_list : SurfaceDataList, i
         cluster_labels = surface_data_slice.get_cluster_labels()
         # transfrom surface_data_slice to array with points
 
-        points_slice = np.array([])#todo
+        points_slice = np.array(surface_data_slice.list[0].points_list)
         # transform cluster_labels to array
         cluster_labels = np.array(cluster_labels)
-        _visualize_clusters(surface_data_slice, cluster_labels, image_save_folder, f'time_{i}_clusters_time.png')
+        _visualize_clusters(points_slice, cluster_labels, image_save_folder, f'time_{i}_clusters_time.png')
 
 def _visualize_for_each_time(original_points_all, processed_points_all,
                              image_save_folder, cluster_labels):
@@ -278,7 +278,7 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
         # Load the trained model for the current cluster
         model_weights_filepath = model_weights_template.format(cluster=cluster)
         model = _load_trained_model(model_weights_filepath)
-        device = get_device()
+        device = NN_DEVICE
 
         model.to(device)
 
@@ -341,10 +341,6 @@ def _load_trained_model(model_weights_filepath):
 
     return model
 
-
-import matplotlib.pyplot as plt
-import numpy as np
-import os
 
 def _visualize_clusters(points, labels, image_save_folder, image_name):
     """

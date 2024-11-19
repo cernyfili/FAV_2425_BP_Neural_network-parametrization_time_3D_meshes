@@ -11,6 +11,7 @@ from src.data_processing.mapping import SurfaceDataList, process_surface_data
 from src.nerual_network.model import NNDataset
 from src.utils.constants import nn_optimizer, nn_model, TrainConfig
 from src.utils.helpers import load_pickle_file
+from utils.constants import NN_DEVICE
 
 
 # Restrict access to underscore-prefixed functions
@@ -45,7 +46,7 @@ def _train_one_epoch(model, train_loader, criterion, optimizer, device):
 
 # Main training function with early stopping and scheduler
 def _train_neural_network(data, num_epochs, patience, model_save_path, batch_size):
-    device = get_device()
+    device = NN_DEVICE
     logging.info(f"Using device: {device}")
 
     train_loader, val_loader = _create_data_loaders(data, batch_size)
@@ -80,7 +81,6 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
             logging.info(f"No improvement for {epochs_no_improve} epochs")
 
         if epochs_no_improve >= patience:
-
             logging.info(
                 f"Early stopping after {epoch} epochs (Best epoch: {best_epoch} with val loss {best_val_loss:.4f})")
             break
@@ -109,12 +109,6 @@ def _train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, p
         _train_neural_network(surface_data_cluster.list, max_epochs, patience, model_weights_filepath, batch_size)
 
         logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
-
-
-# Function to get the appropriate device
-def get_device():
-    #return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    return torch.device('cuda')
 
 
 # Function to split data and create data loaders
@@ -158,7 +152,6 @@ def _save_checkpoint(model, optimizer, epoch, val_loss):
         'optimizer_state_dict': optimizer.state_dict(),
         'val_loss': val_loss,
     }
-
 
 
 def train_nn_for_object(train_config: TrainConfig):

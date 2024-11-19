@@ -18,6 +18,8 @@ nn_batch_size = 64
 
 nn_model = Simple_MLP_02()
 nn_optimizer = optim.Adam(nn_model.parameters(), lr=0.001)
+
+NN_DEVICE = torch.device('cpu')
 # endregion
 
 # region Data processing constants

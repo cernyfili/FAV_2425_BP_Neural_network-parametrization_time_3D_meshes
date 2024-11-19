@@ -1,5 +1,6 @@
-pandas~=2.2.2
-matplotlib~=3.8.0
-opencv-python~=4.10.0.84
+pandas
+matplotlib
+opencv-python
 trimesh
-pytorch
+torch
+numpy
