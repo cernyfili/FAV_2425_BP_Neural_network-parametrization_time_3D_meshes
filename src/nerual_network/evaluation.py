@@ -72,6 +72,10 @@ def _visualize_all_clusters_for_each_time(surface_data_list, image_save_folder):
     for i, time in enumerate(unique_times):
         surface_data_slice = surface_data_list.filter_by_time(time)
         cluster_labels = surface_data_slice.get_cluster_labels()
+        # transfrom surface_data_slice to array with points
+        surface_data_slice = np.array([point.get_point() for point in surface_data_slice.list])
+        # transform cluster_labels to array
+        cluster_labels = np.array([label[0] for label in cluster_labels])
         _visualize_clusters(surface_data_slice, cluster_labels, image_save_folder, f'time_{i}_clusters_time.png')
 
 def _visualize_for_each_time(original_points_all, processed_points_all,
@@ -342,7 +346,8 @@ def _visualize_clusters(points, labels, image_save_folder, image_name):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
-    scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=labels / np.max(labels), cmap='jet', s=50)
+    normalized_labels = labels / np.max(labels)
+    scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=normalized_labels, cmap='jet', s=50)
     plt.colorbar(scatter)
 
     ax.set_xlabel('X')
