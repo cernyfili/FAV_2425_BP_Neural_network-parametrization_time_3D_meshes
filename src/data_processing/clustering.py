@@ -48,32 +48,6 @@ def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes):
 
 
 # Function to visualize points and clusters on a 3D model
-def visualize_clusters(points, labels, image_save_folder, image_name):
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-
-    scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=labels / np.max(labels), cmap='jet', s=50)
-    plt.colorbar(scatter)
-
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    #
-    # # rotate the axes and update
-    # for angle in range(0, 360):
-    #     ax.view_init(30, angle)
-    #     plt.draw()
-    #     plt.pause(.001)
-
-    # Set the initial view angle
-    ax.view_init(elev=-70, azim=90)  # Change these values to rotate
-
-    plt.title("3D Clusters with Mesh")
-
-    image_path = os.path.join(image_save_folder, image_name)
-    plt.savefig(image_path)
-    plt.close(fig)
 
 
 # write me function which will from the variable PUB_all_center_points get points from specific time step

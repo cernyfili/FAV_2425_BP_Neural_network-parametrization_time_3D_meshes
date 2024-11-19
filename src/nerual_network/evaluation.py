@@ -6,7 +6,6 @@ import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 
-from data_processing.clustering import visualize_clusters
 from data_processing.mapping import SurfaceDataList, convert_to_surface_data_list
 from nerual_network.training import get_device
 from src.utils.constants import nn_optimizer, nn_model, TrainConfig
@@ -52,7 +51,28 @@ def evaluate(train_config: TrainConfig):
                              images_save_folderpath, cluster_labels)
     _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
     _visualize_original_and_processed_points(original_points_all, processed_points_all, images_save_folderpath)
+    _visualize_all_clusters_for_each_time(surface_data_list, images_save_folderpath)
 
+
+def _visualize_all_clusters_for_each_time(surface_data_list, image_save_folder):
+    """
+    Visualizes the original and processed points in 3D in one image for each time slice.
+    :param original_points_all:
+    :param processed_points_all:
+    :param image_save_folder:
+    :return:
+    """
+    # Ensure the image save folder exists
+    os.makedirs(image_save_folder, exist_ok=True)
+
+    # Extract unique time values assuming the last column contains time values
+    unique_times = np.unique(surface_data_list.get_times())
+
+    # Loop through each unique time value
+    for i, time in enumerate(unique_times):
+        surface_data_slice = surface_data_list.filter_by_time(time)
+        cluster_labels = surface_data_slice.get_cluster_labels()
+        _visualize_clusters(surface_data_slice, cluster_labels, image_save_folder, f'time_{i}_clusters_time.png')
 
 def _visualize_for_each_time(original_points_all, processed_points_all,
                              image_save_folder, cluster_labels):
@@ -79,8 +99,7 @@ def _visualize_for_each_time(original_points_all, processed_points_all,
                                                         processed_points_slice, f'time_{i}_combined_surface_points_time.png', time)
 
         # visulize clusters
-        visualize_clusters(original_points_slice, cluster_labels_slice, image_save_folder,
-                           f'time_{i}_clustered_surface_points_time.png')
+
 
 
 def visualize_combined_surface_points_for_each_time(image_save_folder, original_points_slice, processed_points_slice,
@@ -316,3 +335,31 @@ def _load_trained_model(model_weights_filepath):
     model.eval()
 
     return model
+
+
+def _visualize_clusters(points, labels, image_save_folder, image_name):
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=labels / np.max(labels), cmap='jet', s=50)
+    plt.colorbar(scatter)
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    #
+    # # rotate the axes and update
+    # for angle in range(0, 360):
+    #     ax.view_init(30, angle)
+    #     plt.draw()
+    #     plt.pause(.001)
+
+    # Set the initial view angle
+    ax.view_init(elev=-70, azim=90)  # Change these values to rotate
+
+    plt.title("3D Clusters with Mesh")
+
+    image_path = os.path.join(image_save_folder, image_name)
+    plt.savefig(image_path)
+    plt.close(fig)

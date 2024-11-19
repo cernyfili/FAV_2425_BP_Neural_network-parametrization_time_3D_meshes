@@ -16,6 +16,7 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
+
 def convert_to_surface_data_list(input_list):
     """
     Converts a standard Python list into a SurfaceDataList.
@@ -47,6 +48,24 @@ class SurfaceDataList:
         # Initialize unique_clusters at creation
         self.unique_clusters = self.compute_unique_clusters()
 
+    def filter_by_time(self, time_index):
+        """
+        :param time_index:
+        :return:
+        """
+        filtered_data = []
+        for surface_data in self.list:
+            if surface_data.time == time_index:
+                filtered_data.append(surface_data)
+
+        return SurfaceDataList(filtered_data)
+
+    def get_cluster_labels(self):
+        """
+        Return the list of cluster labels.
+        """
+        return [label for surface_data in self.list for label in surface_data.labels_list]
+
     def compute_unique_clusters(self):
         """
         Private method to compute unique clusters from the surface data list.
@@ -56,6 +75,7 @@ class SurfaceDataList:
             unique_clusters.update(
                 int(label) for label in surface_data.labels_list)  # Convert each sub-array to a tuple
         return unique_clusters
+
     def get_unique_clusters(self):
         """
         Return the set of unique clusters.
@@ -114,7 +134,7 @@ class SurfaceDataList:
             matching_indices = np.where(labels_array == label_index)[0]
 
             if matching_indices.size == 0:
-                    raise ValueError("No points with the specified label index found.")
+                raise ValueError("No points with the specified label index found.")
 
             # Use the indices to filter points and labels
             filtered_points = points_array[matching_indices].tolist()
@@ -356,7 +376,7 @@ def _save_surface_data(clustered_data, num_surface_points, meshes_folder_path,
 # todo graphics max distance computing
 
 def _generate_random_points_on_mesh(vertices, faces, num_points):
-    #todo check if it is working
+    # todo check if it is working
     """
     Generate random points on the surface of a mesh.
 
