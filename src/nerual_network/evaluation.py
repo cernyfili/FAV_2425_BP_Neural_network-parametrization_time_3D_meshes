@@ -73,12 +73,13 @@ def _visualize_for_each_time(original_points_all, processed_points_all,
     for i, time in enumerate(unique_times):
         original_points_slice = original_points_all[original_points_all[:, 3] == time]
         processed_points_slice = processed_points_all[processed_points_all[:, 3] == time]
+        cluster_labels_slice = [label for label in cluster_labels if label[1] == time]
 
         visualize_combined_surface_points_for_each_time(image_save_folder, original_points_slice,
                                                         processed_points_slice, f'time_{i}_combined_surface_points_time.png')
 
         # visulize clusters
-        visualize_clusters(original_points_slice, cluster_labels, image_save_folder,
+        visualize_clusters(original_points_slice, cluster_labels_slice, image_save_folder,
                            f'time_{i}_clustered_surface_points_time.png')
 
 
@@ -277,7 +278,8 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
         original_points_all.append(original_points_dataset.data)  # You can store the numpy array directly
         processed_points_all.append(processed_points)
         # cluster labels store
-        cluster_labels.extend([cluster] * len(original_points_dataset.data))
+        cluster_labels.extend([(cluster, point[-1]) for point in original_points_dataset.data])
+        """ saved cluster list with id same as points and its structure is (cluster_id, time) """
     # Convert lists to numpy arrays for plotting
     original_points_all = np.vstack(original_points_all) if original_points_all else np.empty((0, 4))
     processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 4))
