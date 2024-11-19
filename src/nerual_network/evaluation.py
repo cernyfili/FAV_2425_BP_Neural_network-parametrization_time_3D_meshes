@@ -76,7 +76,7 @@ def _visualize_for_each_time(original_points_all, processed_points_all,
         cluster_labels_slice = [label for label in cluster_labels if label[1] == time]
 
         visualize_combined_surface_points_for_each_time(image_save_folder, original_points_slice,
-                                                        processed_points_slice, f'time_{i}_combined_surface_points_time.png')
+                                                        processed_points_slice, f'time_{i}_combined_surface_points_time.png', time)
 
         # visulize clusters
         visualize_clusters(original_points_slice, cluster_labels_slice, image_save_folder,
@@ -84,7 +84,7 @@ def _visualize_for_each_time(original_points_all, processed_points_all,
 
 
 def visualize_combined_surface_points_for_each_time(image_save_folder, original_points_slice, processed_points_slice,
-                                                    image_name):
+                                                    image_name, time):
     # Create a new figure for each time slice
     fig = plt.figure(figsize=(12, 8))
     ax = fig.add_subplot(111, projection='3d')
