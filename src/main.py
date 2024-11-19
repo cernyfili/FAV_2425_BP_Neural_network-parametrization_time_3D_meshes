@@ -5,8 +5,7 @@ from nerual_network.evaluation import evaluate
 from nerual_network.training import train_nn_for_object
 from src.data_processing.mapping import SurfaceDataList
 from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig, DEFAULT_NN_CONFIG
-
-
+from utils.helpers import init_logger
 
 
 # def train_nn_for_object(num_clusters, num_surface_points, nn_max_epochs, nn_patience, nn_batch_size, raw_data_folderpath):
@@ -43,9 +42,11 @@ def main():
     data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
 
     for data_foldername in data_folders:
-        logging.info("---------------------START OBJECT-------------------")
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername=data_foldername))
+        init_logger(train_config.file_path_config.log_filepath)
+
+        logging.info("---------------------START OBJECT-------------------")
         train_nn_for_object(train_config)
         evaluate(train_config)
         logging.info("---------------------END OBJECT-------------------")

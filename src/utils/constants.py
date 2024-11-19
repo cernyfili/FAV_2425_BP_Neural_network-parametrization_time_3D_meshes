@@ -51,9 +51,6 @@ os.makedirs(processed_folderpath, exist_ok=True)
 # RAW_DATA_FOLDERPATH = os.path.join(raw_data_folderpath, data_foldername)  # Update with the correct path
 # IMAGE_SAVE_FOLDERPATH = processed_session_folderpath
 
-#default
-LOG_FILE_FILEPATH = os.path.join(processed_folderpath, log_file_filename)  # Specify your log file path here
-
 
 #
 # SURFACE_DATA_EXPORT_FILE_FILEPATH = os.path.join(processed_data_folderpath, surface_data_list_filename)
@@ -96,9 +93,7 @@ class FilePathConfig:
             processed_session_folderpath = os.path.join(processed_data_folderpath, timestamped_foldername)
         os.makedirs(processed_session_folderpath, exist_ok=True)
 
-        global LOG_FILE_FILEPATH
-        LOG_FILE_FILEPATH = os.path.join(processed_session_folderpath, log_file_filename)  # Specify your log file path here
-
+        self.log_filepath = os.path.join(processed_session_folderpath, log_file_filename)  # Specify your log file path here
         self.raw_data_folderpath = os.path.join(raw_data_folderpath, data_foldername)
         self.images_save_folderpath = os.path.join(processed_session_folderpath)
         self.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)

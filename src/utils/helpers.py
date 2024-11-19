@@ -162,3 +162,26 @@ def save_all_clusters_surface_points_image(original_points_dict, processed_point
     plt.close(fig)  # Close the figure to free memory
 
     logging.info(f"Saved surface points image for all clusters at {image_path}")
+
+def init_logger(log_filepath):
+    # Create a logger
+    logger = logging.getLogger()
+    # Set the logging level
+    logger.setLevel(logging.INFO)
+    # Create handlers
+    console_handler = logging.StreamHandler()  # For console output
+    file_handler = logging.FileHandler(log_filepath)  # For file output
+    # Set the logging level for handlers
+    console_handler.setLevel(logging.INFO)
+    file_handler.setLevel(logging.INFO)
+    # Create a formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    # Add the formatter to the handlers
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+    # Add the handlers to the logger
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    # Example usage of the logger
+    logger.info("Logging has been configured.")
+

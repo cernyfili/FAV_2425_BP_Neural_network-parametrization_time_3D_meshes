@@ -8,7 +8,6 @@ from torch.utils.data import Subset, DataLoader
 
 from src.data_processing.clustering import process_clustered_data
 from src.data_processing.mapping import SurfaceDataList, process_surface_data
-from src.nerual_network.evaluation import evaluate
 from src.nerual_network.model import NNDataset
 from src.utils.constants import nn_optimizer, nn_model, TrainConfig
 from src.utils.helpers import load_pickle_file
