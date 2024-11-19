@@ -66,7 +66,7 @@ def _visualize_all_clusters_for_each_time(surface_data_list, image_save_folder):
     os.makedirs(image_save_folder, exist_ok=True)
 
     # Extract unique time values assuming the last column contains time values
-    unique_times = np.unique(surface_data_list.get_times())
+    unique_times = surface_data_list.get_unique_times()
 
     # Loop through each unique time value
     for i, time in enumerate(unique_times):

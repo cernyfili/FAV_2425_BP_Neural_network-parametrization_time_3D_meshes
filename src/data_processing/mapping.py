@@ -48,6 +48,12 @@ class SurfaceDataList:
         # Initialize unique_clusters at creation
         self.unique_clusters = self.compute_unique_clusters()
 
+    def get_unique_times(self):
+        """
+        Return the set of unique times.
+        """
+        return {surface_data.time for surface_data in self.list}
+
     def filter_by_time(self, time_index):
         """
         :param time_index:
