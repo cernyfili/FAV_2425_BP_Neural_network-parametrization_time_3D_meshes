@@ -32,7 +32,7 @@ def evaluate(train_config: TrainConfig):
     if surface_data_list is None or surface_data_list.list is None:
         logging.error("Surface data list could not be loaded. Exiting.")
         return
-    #surface_data_list = convert_to_surface_data_list(surface_data_list)
+    # surface_data_list = convert_to_surface_data_list(surface_data_list)
 
     images_save_folderpath = train_config.file_path_config.images_save_folderpath
     model_weights_template = train_config.file_path_config.model_weights_folderpath
@@ -40,20 +40,22 @@ def evaluate(train_config: TrainConfig):
     point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
     batch_size = train_config.nn_config.batch_size
 
-    original_points_all, processed_points_all = _prepare_export_data(surface_data_list, model_weights_template,
-                                                                     batch_size)
+    original_points_all, processed_points_all, cluster_labels = _prepare_export_data(surface_data_list,
+                                                                                     model_weights_template,
+                                                                                     batch_size)
 
     # Save the combined image
     _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
                              point_cloud_processed_filepath)
 
-    _visualize_combined_surface_points_images_for_each_time(original_points_all, processed_points_all, images_save_folderpath)
+    _visualize_for_each_time(original_points_all, processed_points_all,
+                             images_save_folderpath, cluster_labels)
     _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
     _visualize_original_and_processed_points(original_points_all, processed_points_all, images_save_folderpath)
 
 
-def _visualize_combined_surface_points_images_for_each_time(original_points_all, processed_points_all,
-                                                            image_save_folder):
+def _visualize_for_each_time(original_points_all, processed_points_all,
+                             image_save_folder, cluster_labels):
     """
     Visualizes the original and processed points in 3D in one image for each time slice.
     :param original_points_all:
@@ -69,35 +71,41 @@ def _visualize_combined_surface_points_images_for_each_time(original_points_all,
 
     # Loop through each unique time value
     for i, time in enumerate(unique_times):
-        # Create a new figure for each time slice
-        fig = plt.figure(figsize=(12, 8))
-        ax = fig.add_subplot(111, projection='3d')
-
-        # Filter original points for this time slice
         original_points_slice = original_points_all[original_points_all[:, 3] == time]
-
-        # Plot original points for this time slice
-        ax.scatter(original_points_slice[:, 0], original_points_slice[:, 1], original_points_slice[:, 2],
-                   color='blue', label='Original Points', alpha=0.5)
-
         processed_points_slice = processed_points_all[processed_points_all[:, 3] == time]
 
-        # Plot processed points for this time slice
-        ax.scatter(processed_points_slice[:, 0], processed_points_slice[:, 1], processed_points_slice[:, 2],
-                   color='red', label='Processed Points', alpha=0.5)
+        visualize_combined_surface_points_for_each_time(image_save_folder, original_points_slice,
+                                                        processed_points_slice, f'time_{i}_combined_surface_points_time.png')
 
-        ax.set_xlabel('X Label')
-        ax.set_ylabel('Y Label')
-        ax.set_zlabel('Z Label')
-        ax.set_title(f'3D Visualization of Original and Processed Points from Time {time}')
-        ax.legend()
+        # visulize clusters
+        visualize_clusters(original_points_slice, cluster_labels, image_save_folder,
+                           f'time_{i}_clustered_surface_points_time.png')
 
-        # Save the plot for the current time slice
-        image_path = os.path.join(image_save_folder, f'combined_surface_points_time_{i}.png')
-        plt.savefig(image_path)
-        plt.close(fig)
 
-        print(f"Saved combined surface points image at {image_path}")
+def visualize_combined_surface_points_for_each_time(image_save_folder, original_points_slice, processed_points_slice,
+                                                    image_name):
+    # Create a new figure for each time slice
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    # Filter original points for this time slice
+
+    # Plot original points for this time slice
+    ax.scatter(original_points_slice[:, 0], original_points_slice[:, 1], original_points_slice[:, 2],
+               color='blue', label='Original Points', alpha=0.5)
+
+    # Plot processed points for this time slice
+    ax.scatter(processed_points_slice[:, 0], processed_points_slice[:, 1], processed_points_slice[:, 2],
+               color='red', label='Processed Points', alpha=0.5)
+    ax.set_xlabel('X Label')
+    ax.set_ylabel('Y Label')
+    ax.set_zlabel('Z Label')
+    ax.set_title(f'3D Visualization of Original and Processed Points from Time {time}')
+    ax.legend()
+    # Save the plot for the current time slice
+    image_path = os.path.join(image_save_folder, image_name)
+    plt.savefig(image_path)
+    plt.close(fig)
+    print(f"Saved combined surface points image at {image_path}")
 
 
 def _visualize_points_with_time(original_points_all, processed_points_all, image_save_folder):
@@ -233,6 +241,7 @@ def _visualize_original_and_processed_points(original_points_all, processed_poin
 def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
     original_points_all = []
     processed_points_all = []
+    cluster_labels = []
     unique_clusters = surface_data_list.get_unique_clusters()
     for cluster in unique_clusters:
         # Load the original surface points for the current cluster
@@ -267,13 +276,15 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
         # Accumulate all original and processed points
         original_points_all.append(original_points_dataset.data)  # You can store the numpy array directly
         processed_points_all.append(processed_points)
+        # cluster labels store
+        cluster_labels.extend([cluster] * len(original_points_dataset.data))
     # Convert lists to numpy arrays for plotting
     original_points_all = np.vstack(original_points_all) if original_points_all else np.empty((0, 4))
     processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 4))
 
     processed_points_all = np.hstack((processed_points_all, original_points_all[:, 3].reshape(-1, 1)))
 
-    return original_points_all, processed_points_all
+    return original_points_all, processed_points_all, cluster_labels
 
 
 def _load_trained_model(model_weights_filepath):
