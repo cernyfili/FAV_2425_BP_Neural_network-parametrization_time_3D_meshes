@@ -113,8 +113,8 @@ def _train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, p
 
 # Function to get the appropriate device
 def get_device():
-    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # return torch.device('cpu')
+    #return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    return torch.device('cuda')
 
 
 # Function to split data and create data loaders

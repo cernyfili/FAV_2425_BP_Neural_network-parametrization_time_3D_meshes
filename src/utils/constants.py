@@ -12,7 +12,7 @@ def __getattr__(name):
 
 # region CONSTANTS
 # region Neural network constants
-nn_max_epochs = 2000
+nn_max_epochs = 1
 nn_patience = 5
 nn_batch_size = 64
 
@@ -23,7 +23,7 @@ nn_optimizer = optim.Adam(nn_model.parameters(), lr=0.001)
 # region Data processing constants
 num_clusters = 5
 
-num_surface_points = 3000
+num_surface_points = 1000
 
 RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 # endregion

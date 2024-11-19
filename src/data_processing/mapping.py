@@ -16,6 +16,27 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
+def convert_to_surface_data_list(input_list):
+    """
+    Converts a standard Python list into a SurfaceDataList.
+
+    Parameters:
+    - input_list: list of dictionaries or SurfaceData objects
+
+    Returns:
+    - SurfaceDataList instance
+    """
+    surface_data_objects = []
+
+    for item in input_list:
+        if isinstance(item, SurfaceData):
+            # Already a SurfaceData object
+            surface_data_objects.append(item)
+        else:
+            surface_data_objects.append(SurfaceData(item.points_list, item.labels_list, item.time))
+
+    return SurfaceDataList(surface_data_objects)
+
 
 class SurfaceDataList:
     def __init__(self, surface_data_list: list):

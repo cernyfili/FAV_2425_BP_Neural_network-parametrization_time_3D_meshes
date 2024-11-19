@@ -48,13 +48,10 @@ def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes):
 
 
 # Function to visualize points and clusters on a 3D model
-def _visualize_clusters_with_mesh(points, labels, obj_file_path):
-    mesh = trimesh.load(obj_file_path)
+def visualize_clusters(points, labels):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-
-    mesh.show()  # Visualize the mesh
 
     scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=labels, cmap='jet', s=50)
     plt.colorbar(scatter)

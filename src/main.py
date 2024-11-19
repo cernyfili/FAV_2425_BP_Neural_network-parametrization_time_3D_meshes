@@ -38,8 +38,10 @@ from utils.helpers import init_logger
 #     process_and_save_combined_image_for_all_clusters(surface_data_list)
 
 def main():
-    #data_folders = [ "vr_take", "casual_man_1000", "casual_man_4000"]
-    data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
+
+    #data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
+
+    data_folders = ["ball"]
 
     for data_foldername in data_folders:
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,

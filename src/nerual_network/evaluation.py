@@ -6,7 +6,8 @@ import torch
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 
-from data_processing.mapping import SurfaceDataList
+from data_processing.clustering import visualize_clusters
+from data_processing.mapping import SurfaceDataList, convert_to_surface_data_list
 from nerual_network.training import get_device
 from src.utils.constants import nn_optimizer, nn_model, TrainConfig
 from src.nerual_network.model import NNDataset
@@ -27,13 +28,15 @@ def _save_pointcloud_to_file(original_points_all, processed_points_all, original
 
 def evaluate(train_config: TrainConfig):
     surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
-    if surface_data_list is None or surface_data_list.list is None or not isinstance(surface_data_list,
-                                                                                     SurfaceDataList):
+
+    if surface_data_list is None or surface_data_list.list is None:
         logging.error("Surface data list could not be loaded. Exiting.")
         return
-    images_save_folderpath = train_config.file_path_config.images_save_folderpath,
-    model_weights_template = train_config.file_path_config.model_weights_folderpath,
-    point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath,
+    #surface_data_list = convert_to_surface_data_list(surface_data_list)
+
+    images_save_folderpath = train_config.file_path_config.images_save_folderpath
+    model_weights_template = train_config.file_path_config.model_weights_folderpath
+    point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath
     point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
     batch_size = train_config.nn_config.batch_size
 
@@ -44,13 +47,13 @@ def evaluate(train_config: TrainConfig):
     _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
                              point_cloud_processed_filepath)
 
-    _visualize_combined_surface_points_images(original_points_all, processed_points_all, images_save_folderpath)
+    _visualize_combined_surface_points_images_for_each_time(original_points_all, processed_points_all, images_save_folderpath)
     _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
     _visualize_original_and_processed_points(original_points_all, processed_points_all, images_save_folderpath)
 
 
-def _visualize_combined_surface_points_images(original_points_all, processed_points_all,
-                                              image_save_folder):
+def _visualize_combined_surface_points_images_for_each_time(original_points_all, processed_points_all,
+                                                            image_save_folder):
     """
     Visualizes the original and processed points in 3D in one image for each time slice.
     :param original_points_all:
@@ -90,7 +93,7 @@ def _visualize_combined_surface_points_images(original_points_all, processed_poi
         ax.legend()
 
         # Save the plot for the current time slice
-        image_path = os.path.join(image_save_folder, f'combined_surface_points_time_{time}.png')
+        image_path = os.path.join(image_save_folder, f'combined_surface_points_time_{i}.png')
         plt.savefig(image_path)
         plt.close(fig)
 
@@ -241,7 +244,9 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
         # Load the trained model for the current cluster
         model_weights_filepath = model_weights_template.format(cluster=cluster)
         model = _load_trained_model(model_weights_filepath)
-        model.to(get_device())
+        device = get_device()
+
+        model.to(device)
 
         # Prepare a DataLoader for original points
         original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=True)
@@ -251,13 +256,13 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
         with torch.no_grad():
             for batch in original_points_loader:
                 inputs = batch[0]  # Get only the points with time
-                inputs = inputs.float()
+                inputs = inputs.float().to(device)
 
                 outputs = model(inputs)  # Forward pass through the model
                 processed_points.append(outputs)
 
         # Convert processed points to a single numpy array
-        processed_points = torch.cat(processed_points).numpy()
+        processed_points = torch.cat(processed_points).cpu().numpy()
 
         # Accumulate all original and processed points
         original_points_all.append(original_points_dataset.data)  # You can store the numpy array directly
