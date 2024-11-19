@@ -91,8 +91,8 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
 
 
 # Function to train the neural network for each cluster
-def train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, patience, batch_size,
-                              model_weights_template):
+def _train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, patience, batch_size,
+                               model_weights_template):
     logging.info("Starting Training Neural network")
     # Identify unique clusters in the data
     unique_clusters = surface_data_list.get_unique_clusters()
@@ -183,8 +183,8 @@ def train_nn_for_object(train_config: TrainConfig):
         logging.error("Surface data list could not be loaded. Exiting.")
         return
 
-    train_nn_for_all_clusters(surface_data_list, max_epochs=train_config.nn_config.max_epochs,
-                              patience=train_config.nn_config.patience,
-                              batch_size=train_config.nn_config.batch_size,
-                              model_weights_template=train_config.file_path_config.model_weights_folderpath)
+    _train_nn_for_all_clusters(surface_data_list, max_epochs=train_config.nn_config.max_epochs,
+                               patience=train_config.nn_config.patience,
+                               batch_size=train_config.nn_config.batch_size,
+                               model_weights_template=train_config.file_path_config.model_weights_folderpath)
     logging.info("------------------TRAINING ENDED------------------")

@@ -85,15 +85,19 @@ class SurfaceDataList:
         filtered_data = []
 
         for surface_data in self.list:
-            # Find indices of points with the specified label index
-            matching_indices = [i for i, label in enumerate(surface_data.labels_list) if label == label_index]
-            if matching_indices is None:
-                # throw error
+        # Convert labels_list to a numpy array for efficient filtering
+        labels_array = np.array(surface_data.labels_list)
+        points_array = np.array(surface_data.points_list)
+
+        # Find indices where the label matches the specified label index
+        matching_indices = np.where(labels_array == label_index)[0]
+
+        if matching_indices.size == 0:
                 raise ValueError("No points with the specified label index found.")
-            if matching_indices:
-                # Filter surface points and labels using these indices
-                filtered_points = [surface_data.points_list[i] for i in matching_indices]
-                filtered_labels = [surface_data.labels_list[i] for i in matching_indices]
+
+        # Use the indices to filter points and labels
+        filtered_points = points_array[matching_indices].tolist()
+        filtered_labels = labels_array[matching_indices].tolist()
 
                 # Create a new SurfaceData instance with the filtered points and labels
                 filtered_data.append(SurfaceData(filtered_points, filtered_labels, surface_data.time))
