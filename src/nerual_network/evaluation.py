@@ -283,7 +283,7 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size):
         model.to(device)
 
         # Prepare a DataLoader for original points
-        original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=True)
+        original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=False)
 
         # Process the original points through the model
         processed_points = []

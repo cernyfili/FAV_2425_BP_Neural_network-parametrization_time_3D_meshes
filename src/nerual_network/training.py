@@ -8,8 +8,8 @@ from torch.utils.data import Subset, DataLoader
 
 from src.data_processing.clustering import process_clustered_data
 from src.data_processing.mapping import SurfaceDataList, process_surface_data
-from src.nerual_network.model import NNDataset
-from src.utils.constants import nn_optimizer, nn_model, TrainConfig
+from src.nerual_network.model import NNDataset, Simple_MLP_02
+from src.utils.constants import nn_optimizer, nn_model, TrainConfig, nn_lr
 from src.utils.helpers import load_pickle_file
 from utils.constants import NN_DEVICE
 
@@ -50,9 +50,13 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
     logging.info(f"Using device: {device}")
 
     train_loader, val_loader = _create_data_loaders(data, batch_size)
-    model = nn_model
+
+    model = Simple_MLP_02()
+    optimizer = optim.Adam(model.parameters(), lr=nn_lr)
+
+    # model = nn_model
     criterion = nn.MSELoss()
-    optimizer = nn_optimizer
+    # optimizer = nn_optimizer
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
 
     best_val_loss = float('inf')
@@ -66,7 +70,7 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
         val_loss = _evaluate(model, val_loader, criterion, device)
 
         # Learning rate scheduler step
-        scheduler.step(val_loss)
+        # scheduler.step(val_loss)
 
         logging.info(f"Epoch [{epoch}/{num_epochs}], Train Loss: {train_loss:.10f}, Val Loss: {val_loss:.10f}")
 
@@ -92,6 +96,9 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
 # Function to train the neural network for each cluster
 def _train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, patience, batch_size,
                                model_weights_template):
+    if max_epochs == 0:
+        return
+
     logging.info("Starting Training Neural network")
     # Identify unique clusters in the data
     unique_clusters = surface_data_list.get_unique_clusters()

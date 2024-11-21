@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from src.nerual_network.model import Simple_MLP_02
 import torch.optim as optim
+import torch
 
 
 # Restrict access to only uppercase constants
@@ -12,20 +13,20 @@ def __getattr__(name):
 
 # region CONSTANTS
 # region Neural network constants
-nn_max_epochs = 1
+nn_max_epochs = 100
 nn_patience = 5
-nn_batch_size = 64
-
+nn_batch_size = 128
+nn_lr = 1e-4
 nn_model = Simple_MLP_02()
-nn_optimizer = optim.Adam(nn_model.parameters(), lr=0.001)
+nn_optimizer = optim.Adam(nn_model.parameters(), lr=nn_lr)
 
-NN_DEVICE = torch.device('cpu')
+NN_DEVICE = torch.device('cuda')
 # endregion
 
 # region Data processing constants
 num_clusters = 5
 
-num_surface_points = 1000
+num_surface_points = 5000
 
 RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 # endregion
@@ -87,7 +88,7 @@ class NNConfig:
 
 class FilePathConfig:
     def __init__(self, data_foldername, processed_session_folderpath=None):
-        current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        current_time_str = datetime.now().strftime("%Y%m%d")
         # Create a folder name based on the current date and time
         timestamped_foldername = f"{data_foldername}_{current_time_str}"
         processed_data_folderpath = os.path.join(processed_folderpath, data_foldername)
