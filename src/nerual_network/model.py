@@ -86,14 +86,30 @@ class Simple_MLP_02(nn.Module):
             nn.Linear(64, 3)
         )
 
-    def forward(self, x):
-        # Extract time value and keep it as a column vector
-        time_value = x[:, 3].unsqueeze(1)
+    def forward(self, x, time_value=None):
+        """
+        Forward pass for the model.
 
-        # Encode the input features (excluding time) and concatenate with time
+        Args:
+            x (torch.Tensor): Input tensor.
+            time_value (torch.Tensor, optional): Custom time value as a column vector.
+                                                 If None, it will be extracted from `x`.
+
+        Returns:
+            torch.Tensor: Decoded output.
+        """
+        if time_value is None:
+            # Extract time value from the input tensor if not provided
+            time_value = x[:, 3].unsqueeze(1)
+
+        # Encode the input features
         encoded_features = self.encoder(x)
+
+        # Concatenate the encoded features with the time value
         encoded_with_time = torch.cat((encoded_features, time_value), dim=1)
 
         # Decode the combined encoded features and time
         decoded_output = self.decoder(encoded_with_time)
+
         return decoded_output
+
