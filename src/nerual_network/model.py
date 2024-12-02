@@ -86,7 +86,7 @@ class Simple_MLP_02(nn.Module):
             nn.Linear(64, 3)
         )
 
-    def forward(self, x, time_value=None):
+    def forward(self, x, time_value: int = None):
         """
         Forward pass for the model.
 
@@ -98,15 +98,16 @@ class Simple_MLP_02(nn.Module):
         Returns:
             torch.Tensor: Decoded output.
         """
-        if time_value is None:
-            # Extract time value from the input tensor if not provided
-            time_value = x[:, 3].unsqueeze(1)
+        time = x[:, 3].unsqueeze(1)
+        if time_value is not None:
+            # change all the time_value so all elements have the value of time_value
+            time = torch.full_like(time, time_value)
 
         # Encode the input features
         encoded_features = self.encoder(x)
 
         # Concatenate the encoded features with the time value
-        encoded_with_time = torch.cat((encoded_features, time_value), dim=1)
+        encoded_with_time = torch.cat((encoded_features, time), dim=1)
 
         # Decode the combined encoded features and time
         decoded_output = self.decoder(encoded_with_time)

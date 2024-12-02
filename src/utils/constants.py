@@ -11,6 +11,7 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private variable and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
+
 # region CONSTANTS
 # region Neural network constants
 nn_max_epochs = 100
@@ -44,9 +45,11 @@ log_file_filename = 'application.log'
 point_cloud_original_filename = "original_points_all.csv"
 point_cloud_processed_filename = "processed_points_all.csv"
 
-raw_data_folderpath = '..\\data\\raw'
-processed_folderpath = "..\\data\\processed"
-os.makedirs(processed_folderpath, exist_ok=True)
+default_raw_folderpath = '..\\data\\raw'
+default_processed_folderpath = "..\\data\\processed"
+os.makedirs(default_processed_folderpath, exist_ok=True)
+
+
 # endregion
 
 
@@ -87,16 +90,26 @@ class NNConfig:
 
 
 class FilePathConfig:
-    def __init__(self, data_foldername, processed_session_folderpath=None):
+    def __init__(self, data_foldername, processed_session_folderpath=None, raw_folderpath=None,
+                 processed_folderpath=None):
         current_time_str = datetime.now().strftime("%Y%m%d")
         # Create a folder name based on the current date and time
         timestamped_foldername = f"{data_foldername}_{current_time_str}"
-        processed_data_folderpath = os.path.join(processed_folderpath, data_foldername)
+
+        if raw_folderpath is None:
+            raw_folderpath = default_raw_folderpath
+        raw_data_folderpath = str(os.path.join(raw_folderpath, data_foldername))
+
+        if processed_folderpath is None:
+            processed_folderpath = default_processed_folderpath
+        processed_data_folderpath = str(os.path.join(processed_folderpath, data_foldername))
+
         if processed_session_folderpath is None:
-            processed_session_folderpath = os.path.join(processed_data_folderpath, timestamped_foldername)
+            processed_session_folderpath = str(os.path.join(str(processed_data_folderpath), timestamped_foldername))
         os.makedirs(processed_session_folderpath, exist_ok=True)
 
-        self.log_filepath = os.path.join(processed_session_folderpath, log_file_filename)  # Specify your log file path here
+        self.log_filepath = os.path.join(processed_session_folderpath,
+                                         log_file_filename)  # Specify your log file path here
         self.raw_data_folderpath = os.path.join(raw_data_folderpath, data_foldername)
         self.images_save_folderpath = os.path.join(processed_session_folderpath)
         self.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)
@@ -125,6 +138,8 @@ class TrainConfig:
 
     def __repr__(self):
         return f"TrainConfig(num_clusters={self.num_clusters}, num_surface_points={self.num_surface_points}, nn_config={self.nn_config}, file_path_config={self.file_path_config})"
+
+
 # endregion
 
 

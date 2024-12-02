@@ -51,8 +51,8 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
 
     train_loader, val_loader = _create_data_loaders(data, batch_size)
 
-    model = Simple_MLP_02()
-    optimizer = optim.Adam(model.parameters(), lr=nn_lr)
+    model = Simple_MLP_02() #todo check if is neacceaserry
+    optimizer = optim.Adam(model.parameters(), lr=nn_lr) #todo check if nacesesery
 
     # model = nn_model
     criterion = nn.MSELoss()

@@ -393,7 +393,8 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
 
             # Process the original points through the model
             processed_points = []
-            time = 0 #for visulizing purposes
+            # tenosor column vector with the same value which is 0
+            time = 0
             with torch.no_grad():
                 for batch in original_points_loader:
                     inputs = batch[0]  # Get only the points with time
@@ -434,37 +435,33 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
 
             visualize_for_one_time(images_save_folderpath, original_points_slice,
                                                             processed_points_slice,
-                                                            f'time_{i}_combined_surface_points_time.png', time)
+                                                            f'time_{i}_uv_color_representation.png', time)
     def visualize_for_one_time(images_save_folderpath, original_points_slice, processed_points_slice, image_name, time):
         #visualize point cloud for original point and make the color of the point based on the processed_points
         # where the x,y,z is r,g,b values
 
         # Funkce pro normalizaci pro jednotlivé osy
         def normalize_slices(data, axis):
-            unique_slices = np.unique(data[:, axis])  # Unikátní hodnoty pro řez
+
             normalized = np.zeros_like(data)
 
-            for value in unique_slices:
-                # Vyber body, které patří do aktuálního řezu
-                mask = data[:, axis] == value
-                slice_data = data[mask]
+            min_val = np.min(data, axis=0)
+            max_val = np.max(data, axis=0)
 
-                # Normalizace v rámci tohoto řezu
-                min_vals = np.min(slice_data, axis=0)
-                max_vals = np.max(slice_data, axis=0)
-                normalized_slice = (slice_data - min_vals) / (max_vals - min_vals + 1e-8)
+            for index, value in enumerate(data):
+                normalized_value = (value - min_val) / (max_val - min_val)
 
-                normalized[mask] = normalized_slice
+                normalized[index] = normalized_value
 
             return normalized
 
         # Normalizace podle osy X, Y, Z
-        normalized_x = normalize_slices(processed_points_slice, axis=0)
-        normalized_y = normalize_slices(processed_points_slice, axis=1)
-        normalized_z = normalize_slices(processed_points_slice, axis=2)
+        normalized_x = normalize_slices(processed_points_slice[:,0], axis=0)
+        normalized_y = normalize_slices(processed_points_slice[:,1], axis=1)
+        normalized_z = normalize_slices(processed_points_slice[:,2], axis=2)
 
         # Spojení barev
-        rgb_colors = np.stack([normalized_x[:, 0], normalized_y[:, 1], normalized_z[:, 2]], axis=1)
+        rgb_colors = np.stack([normalized_x, normalized_y, normalized_z], axis=1)
 
 
 

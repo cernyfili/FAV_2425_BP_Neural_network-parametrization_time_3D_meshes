@@ -379,7 +379,6 @@ def _save_surface_data(clustered_data, num_surface_points, meshes_folder_path,
 #         points.append(point)
 #
 #     return np.array(points)
-# todo graphics max distance computing
 
 def _generate_random_points_on_mesh(vertices, faces, num_points):
     # todo check if it is working
