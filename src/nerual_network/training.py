@@ -161,7 +161,7 @@ def _save_checkpoint(model, optimizer, epoch, val_loss):
     }
 
 
-def train_nn_for_object(train_config: TrainConfig):
+def train_nn(train_config: TrainConfig):
     logging.info("------------------TRAINING STARTED------------------")
     logging.info(f"Number of clusters: {train_config.num_clusters}")
     logging.info(f"Number of surface points: {train_config.num_surface_points}")
@@ -169,12 +169,6 @@ def train_nn_for_object(train_config: TrainConfig):
     logging.info(f"Patience for early stopping: {train_config.nn_config.patience}")
     logging.info(f"Batch size: {train_config.nn_config.batch_size}")
     logging.info(f"Raw data folder: {train_config.file_path_config.raw_data_folderpath}")
-
-    process_clustered_data(train_config.num_clusters, train_config.file_path_config.raw_data_folderpath,
-                           train_config.file_path_config.clustered_data_filepath)
-    process_surface_data(train_config.num_surface_points, train_config.file_path_config.raw_data_folderpath,
-                         train_config.file_path_config.surface_data_filepath,
-                         train_config.file_path_config.clustered_data_filepath)
 
     surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
     if surface_data_list is None or surface_data_list.list is None or not isinstance(surface_data_list,

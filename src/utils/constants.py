@@ -25,9 +25,11 @@ NN_DEVICE = torch.device('cuda')
 # endregion
 
 # region Data processing constants
-num_clusters = 5
+NUM_CLUSTERS = 5
 
-num_surface_points = 5000
+NUM_SURFACE_POINTS = 5000
+
+TIME_STEPS = 100
 
 RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 # endregion
@@ -126,18 +128,19 @@ class FilePathConfig:
 
 
 class TrainConfig:
-    def __init__(self, nn_config: NNConfig, file_path_config: FilePathConfig, num_clusters=num_clusters,
-                 num_surface_points=num_surface_points):
+    def __init__(self, nn_config: NNConfig, file_path_config: FilePathConfig, num_clusters=NUM_CLUSTERS,
+                 num_surface_points=NUM_SURFACE_POINTS, time_steps=None):
         self.num_clusters = num_clusters
         self.num_surface_points = num_surface_points
         self.nn_config = nn_config
         self.file_path_config = file_path_config
+        self.time_steps = time_steps
 
     def __str__(self):
-        return f"TrainConfig(num_clusters={self.num_clusters}, num_surface_points={self.num_surface_points}, nn_config={self.nn_config}, file_path_config={self.file_path_config})"
+        return f"TrainConfig(num_clusters={self.num_clusters}, num_surface_points={self.num_surface_points}, nn_config={self.nn_config}, file_path_config={self.file_path_config}, time_steps={self.time_steps})"
 
     def __repr__(self):
-        return f"TrainConfig(num_clusters={self.num_clusters}, num_surface_points={self.num_surface_points}, nn_config={self.nn_config}, file_path_config={self.file_path_config})"
+        return f"TrainConfig(num_clusters={self.num_clusters}, num_surface_points={self.num_surface_points}, nn_config={self.nn_config}, file_path_config={self.file_path_config}, time_steps={self.time_steps})"
 
 
 # endregion
@@ -148,4 +151,4 @@ DEFAULT_NN_CONFIG = NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patienc
 
 DEFAULT_TRAIN_CONFIG = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername="default"),
-                                   num_clusters=num_clusters, num_surface_points=num_surface_points)
+                                   num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS, time_steps=TIME_STEPS)

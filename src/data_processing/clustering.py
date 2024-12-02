@@ -26,17 +26,17 @@ class ClusteredData:
         return self.points[time_step].reshape(-1, 3)
 
 
-def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath):
+def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps):
 
-    clustered_data = _pipeline_clustered_data_prepare(num_clusters, raw_data_folderpath)
+    clustered_data = _pipeline_clustered_data_prepare(num_clusters, raw_data_folderpath, time_steps)
 
     # Save the clustered data
     with open(clustered_data_filepath, 'wb') as f:
         pickle.dump(clustered_data, f)
 
-def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes):
+def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes, time_steps):
 
-    center_points_list, points_in_file = load_data(folder_path_meshes)
+    center_points_list, points_in_file = load_data(folder_path_meshes, time_steps)
     max_distances = compute_max_distances_for_all_pairs(center_points_list, points_in_file)
 
     cluster_center_labels = _hierarchical_clustering_from_precomputed_distances(max_distances, n_clusters=num_clusters)
@@ -69,9 +69,9 @@ def _hierarchical_clustering_from_precomputed_distances(distances, n_clusters=4,
 
 
 # Function to process and save clustered data if not already processed
-def process_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath):
+def process_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps):
     if not os.path.exists(clustered_data_filepath):
-        _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath)
+        _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps)
         logging.info("Clustered data processed and saved.")
     else:
         logging.info("Clustered data already processed.")

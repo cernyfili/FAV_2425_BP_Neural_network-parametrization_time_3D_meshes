@@ -110,7 +110,7 @@ def _load_bin_files(filepaths):
     return data, points_in_file
 
 
-def load_data(folder_path):
+def load_data(folder_path, time_steps):
     """
     Load .xyz files or .bin files from the specified folder and compute the maximum distances between points.
     :param folder_path: path to where is files with computed centers points
@@ -138,6 +138,10 @@ def load_data(folder_path):
 
     if not filepaths:
         raise ValueError("No files found in the specified folder.")
+
+    # Limit the number of time steps to the minimum of the number of files and the specified time steps
+    max_time_steps = max(time_steps, len(filepaths))
+    filepaths = filepaths[:max_time_steps]
 
     # Load the .xyz files
     if file_type == 'xyz':
