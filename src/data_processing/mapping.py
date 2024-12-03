@@ -17,7 +17,7 @@ def __getattr__(name):
     raise AttributeError(f"Module has no attribute {name}")
 
 
-def convert_to_surface_data_list(input_list):
+def _convert_to_surface_data_list(input_list):
     """
     Converts a standard Python list into a SurfaceDataList.
 
@@ -48,6 +48,52 @@ class SurfaceDataList:
         # Initialize unique_clusters at creation
         self.unique_clusters = self.compute_unique_clusters()
 
+    def assign_time_to_surfaces(self):
+        """Assign a time index to each surface data item if not already assigned."""
+        for i, surface_data in enumerate(self.list):
+            if surface_data.time is not None:
+                raise Exception("Time already added to surface data.")
+
+            surface_data.time = i
+
+    def normalize(self):
+        # todo test if it is working
+        """
+        Normalize the surface points for all objects in the list.
+        Normalize the data to the range [0, 1] for each axis and shift it to the origin (0, 0, 0).
+        :return: normalized_surface_points: SurfaceDataList
+        """
+        import numpy as np
+
+        def normalize_time(surface_data_list):
+            total_length = len(surface_data_list.list) - 1
+            for surface_data in surface_data_list.list:
+                surface_data.time /= total_length
+
+        def compute_shift_and_scale(surface_data_list):
+            # Combine all points for faster computation
+            all_points = np.vstack([surface_data.points_list for surface_data in surface_data_list.list])
+            min_corner = np.min(all_points, axis=0)
+            max_corner = np.max(all_points, axis=0)
+            shift_vector = (min_corner + max_corner) / 2
+            max_norm = np.linalg.norm(all_points - shift_vector, axis=1).max()
+            return shift_vector, max_norm
+
+        def shift_and_scale_points(surface_data_list, shift_vector, max_norm):
+            for surface_data in surface_data_list.list:
+                surface_data.points_list = (surface_data.points_list - shift_vector) / max_norm
+
+        # Normalize time for each object
+        normalize_time(self)
+
+        # Compute the shift vector and max norm
+        shift_vector, max_norm = compute_shift_and_scale(self)
+
+        # Shift points to origin and scale
+        shift_and_scale_points(self, shift_vector, max_norm)
+
+        return self
+
     def get_unique_times(self):
         """
         Return the set of unique times.
@@ -65,6 +111,15 @@ class SurfaceDataList:
                 filtered_data.append(surface_data)
 
         return SurfaceDataList(filtered_data)
+
+    def find_element_by_time(self, time_index):
+        """
+        Find the element in the list with the specified time index.
+        """
+        for surface_data in self.list:
+            if surface_data.time == time_index:
+                return surface_data
+        return None
 
     def get_cluster_labels(self):
         """
@@ -157,7 +212,7 @@ class SurfaceData:
     Class to represents points in object for one cluster and for a single time step.
     """
 
-    def __init__(self, surface_points, surface_labels, time):
+    def __init__(self, surface_points, surface_labels = None, time = None):
         self.points_list = surface_points
         self.labels_list = surface_labels
         self.time = time
@@ -236,52 +291,10 @@ def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, n
     return np.array(surface_points), np.array(surface_labels)
 
 
-def _assign_time_to_surfaces(surface_data_list):
-    """Assign a time index to each surface data item if not already assigned."""
-    for i, surface_data in enumerate(surface_data_list.list):
-        if surface_data.time is not None:
-            raise Exception("Time already added to surface data.")
-
-        surface_data.time = i
 
 
-def _normalize(surface_data_list):
-    # todo test if it is working
-    """
-    Normalize the surface points for all objects in the list.
-    Normalize the data to the range [0, 1] for each axis and shift it to the origin (0, 0, 0).
-    :return: normalized_surface_points: SurfaceDataList
-    """
-    import numpy as np
 
-    def normalize_time(surface_data_list):
-        total_length = len(surface_data_list.list) - 1
-        for surface_data in surface_data_list.list:
-            surface_data.time /= total_length
 
-    def compute_shift_and_scale(surface_data_list):
-        # Combine all points for faster computation
-        all_points = np.vstack([surface_data.points_list for surface_data in surface_data_list.list])
-        min_corner = np.min(all_points, axis=0)
-        max_corner = np.max(all_points, axis=0)
-        shift_vector = (min_corner + max_corner) / 2
-        max_norm = np.linalg.norm(all_points - shift_vector, axis=1).max()
-        return shift_vector, max_norm
-
-    def shift_and_scale_points(surface_data_list, shift_vector, max_norm):
-        for surface_data in surface_data_list.list:
-            surface_data.points_list = (surface_data.points_list - shift_vector) / max_norm
-
-    # Normalize time for each object
-    normalize_time(surface_data_list)
-
-    # Compute the shift vector and max norm
-    shift_vector, max_norm = compute_shift_and_scale(surface_data_list)
-
-    # Shift points to origin and scale
-    shift_and_scale_points(surface_data_list, shift_vector, max_norm)
-
-    return surface_data_list
 
 
 def _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list, cluster_center_labels,
@@ -315,8 +328,8 @@ def _prepare_surface_data(meshes_filepaths_list, center_points_list, cluster_cen
                                                               cluster_center_labels,
                                                               num_surface_points)
 
-    _assign_time_to_surfaces(surface_data_list)
-    _normalize(surface_data_list)
+    surface_data_list.assign_time_to_surfaces()
+    surface_data_list.normalize()
 
     return surface_data_list
 

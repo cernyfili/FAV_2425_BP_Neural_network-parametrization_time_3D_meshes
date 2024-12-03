@@ -23,17 +23,17 @@ def _euclidean_distance(p1, p2):
 
 # Function to load .xyz files
 def _load_xyz_files(filepaths):
-    points_in_file = None
+    num_points_in_file = None
     data = []
     for filepath in filepaths:
         points_in_time = np.loadtxt(filepath, delimiter=' ')  # Adjust delimiter if needed
-        if points_in_file is None:
-            points_in_file = points_in_time.shape[0]
-        elif points_in_file != points_in_time.shape[0]:
+        if num_points_in_file is None:
+            num_points_in_file = points_in_time.shape[0]
+        elif num_points_in_file != points_in_time.shape[0]:
             raise ValueError("Inconsistent number of points in the files.")
         data.append(points_in_time)
 
-    return np.array(data), points_in_file  # Shape: (num_files, num_time_steps, num_points)
+    return np.array(data), num_points_in_file  # Shape: (num_files, num_time_steps, num_points)
 
     # Function to compute max distances between pairs of points across time
 
@@ -85,7 +85,7 @@ def _dbscan_clustering_from_precomputed_distances(distances, eps=0.5, min_sample
 def _load_bin_files(filepaths):
     logging.info("Loading .bin files...")
     data = []
-    points_in_file = None
+    num_points_in_file = None
     i = 0
     for filepath in filepaths:
 
@@ -99,18 +99,18 @@ def _load_bin_files(filepaths):
         points = file_data.reshape(-1, 3)
 
         # points_in_file
-        if points_in_file is None:
-            points_in_file = points.shape[0]
-        elif points_in_file != points.shape[0]:
+        if num_points_in_file is None:
+            num_points_in_file = points.shape[0]
+        elif num_points_in_file != points.shape[0]:
             raise ValueError("Inconsistent number of points in the files.")
 
         # Append the points for this file to the data list
         data.append(points)
 
-    return data, points_in_file
+    return data, num_points_in_file
 
 
-def load_data(folder_path, time_steps):
+def load_centers_data(folder_path, time_steps):
     """
     Load .xyz files or .bin files from the specified folder and compute the maximum distances between points.
     :param folder_path: path to where is files with computed centers points
@@ -145,10 +145,10 @@ def load_data(folder_path, time_steps):
 
     # Load the .xyz files
     if file_type == 'xyz':
-        data, points_in_file = _load_xyz_files(filepaths)
+        data, num_points_in_file = _load_xyz_files(filepaths)
     elif file_type == 'bin':
-        data, points_in_file = _load_bin_files(filepaths)
+        data, num_points_in_file = _load_bin_files(filepaths)
     else:
         raise ValueError("Invalid file type. Use 'xyz' or 'bin'.")
 
-    return data, points_in_file
+    return data, num_points_in_file

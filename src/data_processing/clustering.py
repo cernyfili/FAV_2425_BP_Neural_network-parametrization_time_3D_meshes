@@ -7,7 +7,7 @@ import trimesh
 from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fcluster, linkage
 
-from src.data_processing.loader import load_data, compute_max_distances_for_all_pairs
+from src.data_processing.loader import load_centers_data, compute_max_distances_for_all_pairs
 
 
 # Restrict access to underscore-prefixed functions
@@ -36,8 +36,8 @@ def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filep
 
 def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes, time_steps):
 
-    center_points_list, points_in_file = load_data(folder_path_meshes, time_steps)
-    max_distances = compute_max_distances_for_all_pairs(center_points_list, points_in_file)
+    center_points_list, num_points_in_file = load_centers_data(folder_path_meshes, time_steps)
+    max_distances = compute_max_distances_for_all_pairs(center_points_list, num_points_in_file)
 
     cluster_center_labels = _hierarchical_clustering_from_precomputed_distances(max_distances, n_clusters=num_clusters)
     clustered_data = ClusteredData(center_points_list, cluster_center_labels)

@@ -5,6 +5,8 @@ import torch.optim as optim
 import torch
 
 
+
+
 # Restrict access to only uppercase constants
 def __getattr__(name):
     if not name.isupper():
@@ -46,6 +48,9 @@ clustered_data_filename = 'clustered_data.pkl'
 log_file_filename = 'application.log'
 point_cloud_original_filename = "original_points_all.csv"
 point_cloud_processed_filename = "processed_points_all.csv"
+center_metric_eval = "center_metric_eval.txt"
+center_metric_variances = "center_metric_variances.txt"
+mesh_shape_metrics = "mesh_shape_metrics.txt"
 
 default_raw_folderpath = '..\\data\\raw'
 default_processed_folderpath = "..\\data\\processed"
@@ -110,15 +115,24 @@ class FilePathConfig:
             processed_session_folderpath = str(os.path.join(str(processed_data_folderpath), timestamped_foldername))
         os.makedirs(processed_session_folderpath, exist_ok=True)
 
-        self.log_filepath = os.path.join(processed_session_folderpath,
-                                         log_file_filename)  # Specify your log file path here
         self.raw_data_folderpath = os.path.join(raw_data_folderpath, data_foldername)
-        self.images_save_folderpath = os.path.join(processed_session_folderpath)
+
         self.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)
         self.clustered_data_filepath = os.path.join(processed_data_folderpath, clustered_data_filename)
+
+        self.log_filepath = os.path.join(processed_session_folderpath,
+                                         log_file_filename)  # Specify your log file path here
+
+        # EVAL IMAGES
+        self.images_save_folderpath = os.path.join(processed_session_folderpath)
         self.model_weights_folderpath = os.path.join(processed_session_folderpath, model_weights_templatename)
         self.point_cloud_original_filepath = os.path.join(processed_session_folderpath, point_cloud_original_filename)
         self.point_cloud_processed_filepath = os.path.join(processed_session_folderpath, point_cloud_processed_filename)
+
+        # EVAL METRICS
+        self.center_metric_eval_filepath = os.path.join(processed_session_folderpath, center_metric_eval)
+        self.center_metric_variances_filepath = os.path.join(processed_session_folderpath, center_metric_variances)
+        self.mesh_shape_metrics_filepath = os.path.join(processed_session_folderpath, mesh_shape_metrics)
 
     def __str__(self):
         return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_folderpath}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
@@ -152,3 +166,4 @@ DEFAULT_NN_CONFIG = NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patienc
 DEFAULT_TRAIN_CONFIG = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername="default"),
                                    num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS, time_steps=TIME_STEPS)
+EVAL_NUM_SURFACE_POINTS = 1000
