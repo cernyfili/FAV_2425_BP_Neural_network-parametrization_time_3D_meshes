@@ -13,9 +13,9 @@ from src.data_processing.mapping import SurfaceDataList, process_surface_data
 
 
 def preprocess_data(train_config):
-    process_clustered_data(train_config.NUM_CLUSTERS, train_config.file_path_config.raw_data_folderpath,
+    process_clustered_data(train_config.num_clusters, train_config.file_path_config.raw_data_folderpath,
                            train_config.file_path_config.clustered_data_filepath, train_config.time_steps)
-    process_surface_data(train_config.NUM_SURFACE_POINTS, train_config.file_path_config.raw_data_folderpath,
+    process_surface_data(train_config.num_surface_points, train_config.file_path_config.raw_data_folderpath,
                          train_config.file_path_config.surface_data_filepath,
                          train_config.file_path_config.clustered_data_filepath)
 
@@ -23,7 +23,7 @@ def preprocess_data(train_config):
 def main():
     # data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
 
-    data_folders = ["ball_test"]
+    data_folders = ["ball", "casual_man_1000"]
 
     for data_foldername in data_folders:
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,

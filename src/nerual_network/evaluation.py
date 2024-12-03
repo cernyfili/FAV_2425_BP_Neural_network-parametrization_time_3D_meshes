@@ -7,7 +7,7 @@ import trimesh
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from scipy.sparse.linalg import eigsh
-import pymesh
+
 
 from data_processing.loader import load_centers_data
 from data_processing.mapping import SurfaceDataList, SurfaceData
@@ -361,6 +361,9 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list, mo
         # Create a SurfaceDataset instance with the filtered surface data
         original_points_dataset = NNDataset(surface_data_cluster.list)
 
+        # Prepare a DataLoader for original points
+        original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=False)
+
         # Load the trained model for the current cluster
         model_weights_filepath = model_weights_template.format(cluster=cluster)
         model = _load_trained_model(model_weights_filepath)
@@ -368,15 +371,18 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list, mo
 
         model.to(device)
 
-        # Prepare a DataLoader for original points
-        original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=False)
+        encoded_features = []
 
         # Step 1: Encode the original data
         with torch.no_grad():  # No need to calculate gradients during evaluation
-            encoded_features = model.encoder(original_points_loader)
+            for inputs in original_points_loader:
+                inputs = inputs[0].float().to(device)
+                encoded_features_element = model.encoder(inputs)
+                encoded_features.append(encoded_features_element)
+
 
         # Process the original points through the model
-
+        encoded_features = torch.cat(encoded_features)
         # tenosor column vector with the same value which is 0
         for time_value in unique_times:
             # Create a tensor of the same shape as the time feature in the input
@@ -742,13 +748,15 @@ def _compute_mesh_shape_metrics(surface_data_list, train_config):
         Returns:
             np.ndarray: Sorted eigenvalues.
         """
+        #todo fix
         # Create the Laplacian matrix using PyMesh
-        pymesh_mesh = pymesh.form_mesh(mesh.vertices, mesh.faces)
-        laplacian = pymesh.laplacian(pymesh_mesh)
+        #pymesh_mesh = pymesh.form_mesh(mesh.vertices, mesh.faces)
+        #laplacian = pymesh.laplacian(pymesh_mesh)
 
         # Compute the smallest k eigenvalues
-        eigenvalues, _ = eigsh(laplacian, k=k, which='SM')
-        return np.sort(eigenvalues)
+        #eigenvalues, _ = eigsh(laplacian, k=k, which='SM')
+        #return np.sort(eigenvalues)
+        pass
 
     def compute_similarity(original_mesh, processed_mesh):
         # Compute eigenvalues
@@ -818,18 +826,18 @@ def evaluate(train_config: TrainConfig):
     point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
     batch_size = train_config.nn_config.batch_size
 
-    varience_list, evaluation_list = _compute_centers_metrics(surface_data_list, train_config,
-                                                              num_points=EVAL_NUM_SURFACE_POINTS)
-    # save varience_list string represenatation and evaluation_list reprezentetion to file
-    with open(train_config.file_path_config.center_metric_variances_filepath, "w") as file:
-        file.write(str(varience_list))
-    with open(train_config.file_path_config.center_metric_eval_filepath, "w") as file:
-        file.write(str(evaluation_list))
-
-    mesh_shape_metrics = _compute_mesh_shape_metrics(surface_data_list, train_config)
-    # save mesh_shape_metrics to file
-    with open(train_config.file_path_config.mesh_shape_metrics_filepath, "w") as file:
-        file.write(str(mesh_shape_metrics))
+    # varience_list, evaluation_list = _compute_centers_metrics(surface_data_list, train_config,
+    #                                                           num_points=EVAL_NUM_SURFACE_POINTS)
+    # # save varience_list string represenatation and evaluation_list reprezentetion to file
+    # with open(train_config.file_path_config.center_metric_variances_filepath, "w") as file:
+    #     file.write(str(varience_list))
+    # with open(train_config.file_path_config.center_metric_eval_filepath, "w") as file:
+    #     file.write(str(evaluation_list))
+    #
+    # mesh_shape_metrics = _compute_mesh_shape_metrics(surface_data_list, train_config)
+    # # save mesh_shape_metrics to file
+    # with open(train_config.file_path_config.mesh_shape_metrics_filepath, "w") as file:
+    #     file.write(str(mesh_shape_metrics))
 
 
     _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images_save_folderpath, batch_size)

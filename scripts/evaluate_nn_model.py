@@ -1,9 +1,9 @@
 from nerual_network.evaluation import evaluate
 from utils.constants import TrainConfig, DEFAULT_NN_CONFIG, FilePathConfig
 
-PROCESSED_SESSION_FOLDERPATH = 'data/processed/ball/ball_20241120_183230'
-RAW_FOLDERPATH = "data/raw"
-PROCESSED_FOLDERPATH = "data/processed"
+PROCESSED_SESSION_FOLDERPATH = 'data\\processed\\ball\\ball_20241203'
+RAW_FOLDERPATH = "data\\raw"
+PROCESSED_FOLDERPATH = "data\\processed"
 DATA_FOLDERNAME = 'ball'
 
 TRAIN_CONFIG = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
