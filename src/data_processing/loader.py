@@ -140,7 +140,11 @@ def load_centers_data(folder_path, time_steps):
         raise ValueError("No files found in the specified folder.")
 
     # Limit the number of time steps to the minimum of the number of files and the specified time steps
-    max_time_steps = max(time_steps, len(filepaths))
+    if time_steps is None:
+        max_time_steps = len(filepaths)
+    else:
+        max_time_steps = max(time_steps, len(filepaths))
+
     filepaths = filepaths[:max_time_steps]
 
     # Load the .xyz files

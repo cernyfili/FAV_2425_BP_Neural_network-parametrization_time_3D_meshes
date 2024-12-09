@@ -212,10 +212,15 @@ class SurfaceData:
     Class to represents points in object for one cluster and for a single time step.
     """
 
-    def __init__(self, surface_points, surface_labels = None, time = None):
+    def __init__(self, surface_points, surface_labels=None, time=None):
         self.points_list = surface_points
         self.labels_list = surface_labels
         self.time = time
+
+    def slice_arrays(self, id):
+        self.points_list = self.points_list[:id]
+        self.labels_list = self.labels_list[:id]
+        return self
 
 
 #
@@ -289,12 +294,6 @@ def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, n
 
     # Return as NumPy arrays
     return np.array(surface_points), np.array(surface_labels)
-
-
-
-
-
-
 
 
 def _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list, cluster_center_labels,

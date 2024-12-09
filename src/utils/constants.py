@@ -105,7 +105,6 @@ class FilePathConfig:
 
         if raw_folderpath is None:
             raw_folderpath = default_raw_folderpath
-        raw_data_folderpath = str(os.path.join(raw_folderpath, data_foldername))
 
         if processed_folderpath is None:
             processed_folderpath = default_processed_folderpath
@@ -115,7 +114,7 @@ class FilePathConfig:
             processed_session_folderpath = str(os.path.join(str(processed_data_folderpath), timestamped_foldername))
         os.makedirs(processed_session_folderpath, exist_ok=True)
 
-        self.raw_data_folderpath = os.path.join(raw_data_folderpath, data_foldername)
+        self.raw_data_folderpath = os.path.join(raw_folderpath, data_foldername)
 
         self.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)
         self.clustered_data_filepath = os.path.join(processed_data_folderpath, clustered_data_filename)

@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import trimesh
 from matplotlib import pyplot as plt
+from scipy.sparse import csgraph
 from torch.utils.data import DataLoader
 from scipy.sparse.linalg import eigsh
 
@@ -382,36 +383,42 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list, mo
 
 
         # Process the original points through the model
-        encoded_features = torch.cat(encoded_features)
+        encoded_features = torch.cat(encoded_features).to(device)
         # tenosor column vector with the same value which is 0
         for time_value in unique_times:
             # Create a tensor of the same shape as the time feature in the input
-            time_tensor = torch.full((encoded_features.size(0), 1), time_value, dtype=torch.float32)
+            time_tensor = torch.full((encoded_features.size(0), 1), time_value, dtype=torch.float32).to(device)
             # Concatenate the encoded features with the time tensor
-            encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1)
+            encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1).to(device)
+
             # Pass through the decoder
             decoded_output = model.decoder(encoded_with_time)
-            processed_points_all.append(decoded_output)
+            # Add the time_value as a column to decoded_output
+
+            decoded_output = decoded_output.cpu().detach().numpy()
+            time_column = np.full((decoded_output.shape[0], 1), time_value)
+            decoded_output_with_time = np.hstack((decoded_output, time_column))
+
+            # Append the modified decoded output
+            processed_points_all.append(decoded_output_with_time)
 
         # Convert processed points to a single numpy array
 
         # Accumulate all original and processed points
-        original_points_all.append(original_points_dataset.data)  # You can store the numpy array directly
+        original_points_all.append(np.array(original_points_dataset.data))  # You can store the numpy array directly
         # cluster labels store
         cluster_labels.extend([(cluster, point[-1]) for point in original_points_dataset.data])
         """ saved cluster list with id same as points and its structure is (cluster_id, time) """
 
-    # Convert lists to numpy arrays for plotting
     original_points_all = np.vstack(original_points_all) if original_points_all else np.empty((0, 4))
-    processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 4))
 
-    processed_points_all = np.hstack((processed_points_all, original_points_all[:, 3].reshape(-1, 1)))
+    processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 4))
 
     return original_points_all, processed_points_all, cluster_labels
 
 
 def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images_save_folderpath, batch_size):
-    def visualize_for_eachtime(original_points_all, processed_points_all, cluster_labels):
+    def visualize_for_eachtime(original_points_all, processed_points_all):
 
         # Funkce pro normalizaci pro jednotlivé osy
         def normalize_slices(data, axis):
@@ -428,6 +435,7 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
 
             return normalized
 
+
         # Normalizace podle osy X, Y, Z
         normalized_x = normalize_slices(original_points_all[:, 0], axis=0)
         normalized_y = normalize_slices(original_points_all[:, 1], axis=1)
@@ -437,12 +445,11 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
         rgb_colors = np.stack([normalized_x, normalized_y, normalized_z], axis=1)
 
         # Extract unique time values assuming the last column contains time values
-        unique_times = np.unique(original_points_all[:, 3])
+        unique_times = np.unique(processed_points_all[:, 3])
 
         # Loop through each unique time value
         for i, time in enumerate(unique_times):
             processed_points_slice = processed_points_all[processed_points_all[:, 3] == time]
-            cluster_labels_slice = [label for label in cluster_labels if label[1] == time]
 
             visualize_for_one_time(images_save_folderpath, rgb_colors,
                                    processed_points_slice,
@@ -474,7 +481,7 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
     original_points_all, processed_points_all, cluster_labels = run_model_decoder_all_times_with_selected_encoder_time(
         surface_data_list, model_weights_template,
         batch_size, 0)
-    visualize_for_eachtime(original_points_all, processed_points_all, cluster_labels)
+    visualize_for_eachtime(original_points_all, processed_points_all)
 
 
 def _visualize_combined_surface_points_for_one_time(image_save_folder, original_points_slice, processed_points_slice,
@@ -510,14 +517,13 @@ class PairPointCenterPoint:
     """
 
     # point, center, list of EvaluationElement
-    def __init__(self, point, center_point, distance, id):
+    def __init__(self, point, center_point, distance, id, time, label):
         self.points = point
         self.centers = center_point
-        if point.time != center_point.time:
-            raise ValueError("Time of point and center point do not match.")
-        self.time = point.time
+        self.time = time
         self.distance = distance
         self.id = id
+        self.label = label
 
 
 class PairPointCenterPointList:
@@ -525,7 +531,7 @@ class PairPointCenterPointList:
         self.list = evaluation_points_list
 
     def filter_by_point_clusterlabel(self, label):
-        return PairPointCenterPointList([point for point in self.list if point.points.label == label])
+        return PairPointCenterPointList([point for point in self.list if point.label == label])
 
     def get_points_list(self):
         return [point.points for point in self.list]
@@ -615,13 +621,14 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points):
         # make it a Surface data list where each SurfacePoint is one num_points_in_file slice of center_points
 
         # itarate over center_points and create SurfacePoint with num_points_in_file points
-        center_points_list = []
-        for i in range(0, len(center_points), num_points_in_file):
-            center_points_list.append(SurfaceData(center_points[i:i + num_points_in_file]))
+        center_points_list_current = SurfaceDataList([])
+        for i in range(0, center_points.shape[0]):
+            center_points_list_current.append(SurfaceData(center_points[i]))
 
-        center_points_list = SurfaceDataList(center_points_list)
-        center_points_list.assign_time_to_surfaces()
-        return center_points_list
+
+        center_points_list_current.assign_time_to_surfaces()
+        center_points_list_current.normalize()
+        return center_points_list_current
 
     def compute_distance(first_point, second_point):
         return np.linalg.norm(first_point - second_point)
@@ -629,20 +636,26 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points):
     def find_closest_centers(center_points_list: SurfaceData, points_list: SurfaceData):
         pair_original_center = []
         index = 0
-        for point in points_list.points_list:
+        for index_point, point in enumerate(points_list.points_list):
             closest_center_point = None
             min_distance = float('inf')
             for center_point in center_points_list.points_list:
-                distance = compute_distance(point, center_point.points)
+                distance = compute_distance(point, center_point)
                 if distance < min_distance:
                     closest_center_point = center_point
                     min_distance = distance
 
-            pair_original_center.append(PairPointCenterPoint(point, closest_center_point, min_distance, index + 1))
+            if points_list.time != center_points_list.time:
+                raise Exception("Not same time")
+            time = points_list.time
+
+            label = points_list.labels_list[index_point]
+
+            pair_original_center.append(PairPointCenterPoint(point, closest_center_point, min_distance, index + 1, time, label))
         return PairPointCenterPointList(pair_original_center)
 
     def run_through_model(center_points_list, surface_data_list, model_weights_template, batch_size, num_points):
-
+        #todo check if should be normalized
         unique_clusters = surface_data_list.get_unique_clusters()
         unique_times = surface_data_list.get_unique_times()
 
@@ -652,7 +665,7 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points):
 
             # select original points where time is 0
             original_points_timeslice = surface_data_list.find_element_by_time(encoder_time)
-            original_points_timeslice = original_points_timeslice[:num_points]
+            original_points_timeslice = original_points_timeslice.slice_arrays(num_points)
 
             center_points_timeslice = center_points_list.find_element_by_time(encoder_time)
 
@@ -711,7 +724,7 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points):
 
         # load center points
 
-    center_points_list = load_centers_data_from_files(train_config.file_path_config.model_weights_folderpath,
+    center_points_list = load_centers_data_from_files(train_config.file_path_config.raw_data_folderpath,
                                                       train_config.time_steps)
 
     # run through the model
@@ -739,24 +752,24 @@ def _compute_mesh_shape_metrics(surface_data_list, train_config):
 
     def compute_laplacian_eigenvalues(mesh, k=10):
         """
-        Compute the first k eigenvalues of the Laplace-Beltrami operator.
+        Compute the first k eigenvalues of the Laplace-Beltrami operator for a mesh.
 
         Args:
-            mesh (pymesh.Mesh): PyMesh mesh object.
+            mesh (trimesh.Trimesh): Trimesh mesh object.
             k (int): Number of smallest eigenvalues to compute.
 
         Returns:
             np.ndarray: Sorted eigenvalues.
         """
-        #todo fix
-        # Create the Laplacian matrix using PyMesh
-        #pymesh_mesh = pymesh.form_mesh(mesh.vertices, mesh.faces)
-        #laplacian = pymesh.laplacian(pymesh_mesh)
+        # Get the adjacency matrix of the mesh
+        adjacency_matrix = mesh.vertex_adjacency_matrix
 
-        # Compute the smallest k eigenvalues
-        #eigenvalues, _ = eigsh(laplacian, k=k, which='SM')
-        #return np.sort(eigenvalues)
-        pass
+        # Compute the Laplacian matrix
+        laplacian = csgraph.laplacian(adjacency_matrix, normed=True)
+
+        # Compute the smallest k eigenvalues of the Laplacian matrix
+        eigenvalues, _ = eigsh(laplacian, k=k, which='SM')
+        return np.sort(eigenvalues)
 
     def compute_similarity(original_mesh, processed_mesh):
         # Compute eigenvalues
@@ -765,7 +778,7 @@ def _compute_mesh_shape_metrics(surface_data_list, train_config):
         # Compare eigenvalues (e.g., L2 distance)
         return np.linalg.norm(eigenvalues1 - eigenvalues2)
 
-    meshes_folder_path = train_config.file_path_config.meshes_folderpath
+    meshes_folder_path = train_config.file_path_config.raw_data_folderpath
     meshes_filepaths_list = get_meshes_list(meshes_folder_path)
 
     mesh_time_index = 0
@@ -776,12 +789,21 @@ def _compute_mesh_shape_metrics(surface_data_list, train_config):
         mesh = trimesh.load(mesh_filepath)
         loaded_meshes_list.append(mesh)
 
-    # transform mesh vertices to SurfaceDataList and normalize them and add time
-    mesh_points_list = []
+    all_vertices = []
     for mesh in loaded_meshes_list:
-        mesh_points = SurfaceData([mesh.vertices])
+        # Access vertices as a NumPy array
+        vertices = mesh.vertices
+        all_vertices.append(vertices)
+
+    # Combine all vertices into a single NumPy array
+    all_vertices_array = np.vstack(all_vertices)
+    # transform mesh vertices to SurfaceDataList and normalize them and add time
+    mesh_points_list = SurfaceDataList([])
+
+    for vertices in all_vertices:
+        mesh_points = SurfaceData([vertices])
         mesh_points_list.append(mesh_points)
-    mesh_points_list = SurfaceDataList(mesh_points_list)
+
     mesh_points_list.assign_time_to_surfaces()
     mesh_points_list.normalize()
 
@@ -833,24 +855,24 @@ def evaluate(train_config: TrainConfig):
     #     file.write(str(varience_list))
     # with open(train_config.file_path_config.center_metric_eval_filepath, "w") as file:
     #     file.write(str(evaluation_list))
+
+    mesh_shape_metrics = _compute_mesh_shape_metrics(surface_data_list, train_config)
+    # save mesh_shape_metrics to file
+    with open(train_config.file_path_config.mesh_shape_metrics_filepath, "w") as file:
+        file.write(str(mesh_shape_metrics))
+
+
+    # _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images_save_folderpath, batch_size)
     #
-    # mesh_shape_metrics = _compute_mesh_shape_metrics(surface_data_list, train_config)
-    # # save mesh_shape_metrics to file
-    # with open(train_config.file_path_config.mesh_shape_metrics_filepath, "w") as file:
-    #     file.write(str(mesh_shape_metrics))
-
-
-    _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images_save_folderpath, batch_size)
-
-    original_points_all, processed_points_all, cluster_labels = _prepare_export_data(surface_data_list,
-                                                                                     model_weights_template,
-                                                                                     batch_size)
-    # Save the combined image
-    _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
-                             point_cloud_processed_filepath)
-
-    _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
-                                                     images_save_folderpath, cluster_labels)
-    _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
-    _visualize_original_and_processed_points(original_points_all, processed_points_all, images_save_folderpath)
-    _visualize_all_clusters_for_each_time(surface_data_list, images_save_folderpath)
+    # original_points_all, processed_points_all, cluster_labels = _prepare_export_data(surface_data_list,
+    #                                                                                  model_weights_template,
+    #                                                                                  batch_size)
+    # # Save the combined image
+    # _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
+    #                          point_cloud_processed_filepath)
+    #
+    # _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
+    #                                                  images_save_folderpath, cluster_labels)
+    # _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
+    # _visualize_original_and_processed_points(original_points_all, processed_points_all, images_save_folderpath)
+    # _visualize_all_clusters_for_each_time(surface_data_list, images_save_folderpath)
