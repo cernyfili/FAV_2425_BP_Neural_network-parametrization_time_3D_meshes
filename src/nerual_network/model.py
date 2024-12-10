@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 
+from data_processing.mapping_data_structures import SurfacePointsFrameList
+
 
 # Restrict access to underscore-prefixed functions
 def __getattr__(name):
@@ -12,15 +14,15 @@ def __getattr__(name):
 
 
 class NNDataset(Dataset):
-    def __init__(self, surface_data_list: list):
+    def __init__(self, surface_data_list: SurfacePointsFrameList):
         if surface_data_list is None:
             raise ValueError("surface_data_list must not be None")
 
         self.data = []
-        for surface_data in surface_data_list:
+        for surface_data in surface_data_list.list:
             points = surface_data.points_list
             points = np.array(points)
-            time = np.full((points.shape[0], 1), surface_data.time)
+            time = np.full((points.shape[0], 1), surface_data.time.value)
             points_with_time = np.hstack((points, time))
             self.data.append(points_with_time)
 

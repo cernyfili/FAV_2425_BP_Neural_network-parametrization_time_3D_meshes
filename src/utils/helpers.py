@@ -95,6 +95,10 @@ def get_meshes_list(meshes_folder_path):
             obj_file_path = os.path.join(meshes_folder_path, filename)
             obj_files_list.append(obj_file_path)
 
+            file_index = get_file_index_from_filename(obj_file_path)
+            if file_index != len(obj_files_list) - 1:
+                raise Exception(f"File index mismatch: {file_index} vs {len(obj_files_list) - 1}")
+
     return obj_files_list
 
 # Utility function to create a directory if it doesn't exist
@@ -184,4 +188,19 @@ def init_logger(log_filepath):
     logger.addHandler(file_handler)
     # Example usage of the logger
     logger.info("Logging has been configured.")
+    return logger
 
+def end_logger(logger):
+    # Assuming you have a logger defined as in your code
+    logger.info("Ending logging and cleaning up resources.")
+
+    # Remove all handlers
+    handlers = logger.handlers[:]
+    for handler in handlers:
+        handler.close()          # Close the handler (e.g., file handlers)
+        logger.removeHandler(handler)  # Remove it from the logger
+
+
+def get_file_index_from_filename(mesh_file_path, min_file_index=0):
+    file_index = int(mesh_file_path.split('.')[-2][-3:])
+    return file_index + min_file_index

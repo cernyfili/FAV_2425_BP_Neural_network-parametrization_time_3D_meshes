@@ -3,13 +3,13 @@ import logging
 
 from nerual_network.evaluation import evaluate
 from nerual_network.training import train_nn
-from src.data_processing.mapping import SurfaceDataList
+from data_processing.mapping_data_structures import SurfacePointsFrameList
 from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig, DEFAULT_NN_CONFIG, NUM_CLUSTERS, \
-    NUM_SURFACE_POINTS, TIME_STEPS
-from utils.helpers import init_logger
+    NUM_SURFACE_POINTS, MAX_TIME_STEPS
+from utils.helpers import init_logger, end_logger
 
 from src.data_processing.clustering import process_clustered_data
-from src.data_processing.mapping import SurfaceDataList, process_surface_data
+from src.data_processing.mapping import SurfacePointsFrameList, process_surface_data
 
 
 def preprocess_data(train_config):
@@ -23,14 +23,14 @@ def preprocess_data(train_config):
 def main():
     # data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
 
-    data_folders = ["ball", "casual_man_1000"]
+    data_folders = ["ball_test"]
 
     for data_foldername in data_folders:
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername=data_foldername),
                                    num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS,
-                                   time_steps=TIME_STEPS)
-        init_logger(train_config.file_path_config.log_filepath)
+                                   time_steps=MAX_TIME_STEPS)
+        logger = init_logger(train_config.file_path_config.log_filepath)
 
         logging.info("---------------------START OBJECT-------------------")
         logging.info(f"MAIN - Processing data for {data_foldername}")
@@ -40,6 +40,8 @@ def main():
         logging.info(f"MAIN - Evaluating neural network for {data_foldername}")
         evaluate(train_config)
         logging.info("---------------------END OBJECT-------------------")
+
+        end_logger(logger)
 
 
 if __name__ == '__main__':

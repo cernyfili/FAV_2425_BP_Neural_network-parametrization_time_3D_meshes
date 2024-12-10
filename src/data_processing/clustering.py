@@ -3,10 +3,9 @@ import os
 import pickle
 
 import numpy as np
-import trimesh
-from matplotlib import pyplot as plt
 from scipy.cluster.hierarchy import fcluster, linkage
 
+from data_processing.clustering_data_structures import ClusteredCenterPointsAllFrames
 from src.data_processing.loader import load_centers_data, compute_max_distances_for_all_pairs
 
 
@@ -17,31 +16,24 @@ def __getattr__(name):
     raise AttributeError(f"Module has no attribute {name}")
 
 # class for clustered data
-class ClusteredData:
-    def __init__(self, center_points_list, cluster_center_labels):
-        self.points = center_points_list
-        self.labels = cluster_center_labels
-
-    def get_points_from_time_step(self, time_step):
-        return self.points[time_step].reshape(-1, 3)
 
 
 def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps):
 
-    clustered_data = _pipeline_clustered_data_prepare(num_clusters, raw_data_folderpath, time_steps)
+    clustered_points = _pipeline_clustered_data_prepare(num_clusters, raw_data_folderpath, time_steps)
 
     # Save the clustered data
     with open(clustered_data_filepath, 'wb') as f:
-        pickle.dump(clustered_data, f)
+        pickle.dump(clustered_points, f)
 
 def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes, time_steps):
 
-    center_points_list, num_points_in_file = load_centers_data(folder_path_meshes, time_steps)
-    max_distances = compute_max_distances_for_all_pairs(center_points_list, num_points_in_file)
+    center_points_allframes = load_centers_data(folder_path_meshes, time_steps)
+    max_distances_mx = compute_max_distances_for_all_pairs(center_points_allframes)
 
-    cluster_center_labels = _hierarchical_clustering_from_precomputed_distances(max_distances, n_clusters=num_clusters)
-    clustered_data = ClusteredData(center_points_list, cluster_center_labels)
-    return clustered_data
+    cluster_center_labels = _hierarchical_clustering_from_precomputed_distances(max_distances_mx, n_clusters=num_clusters)
+    clustered_center_points_allframes = ClusteredCenterPointsAllFrames(center_points_allframes, cluster_center_labels)
+    return clustered_center_points_allframes
 
 
 # region Visualization

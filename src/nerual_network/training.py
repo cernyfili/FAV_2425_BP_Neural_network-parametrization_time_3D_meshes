@@ -7,7 +7,8 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 
 from src.data_processing.clustering import process_clustered_data
-from src.data_processing.mapping import SurfaceDataList, process_surface_data
+from src.data_processing.mapping import process_surface_data
+from data_processing.mapping_data_structures import SurfacePointsFrameList
 from src.nerual_network.model import NNDataset, Simple_MLP_02
 from src.utils.constants import nn_optimizer, nn_model, TrainConfig, nn_lr
 from src.utils.helpers import load_pickle_file
@@ -45,7 +46,7 @@ def _train_one_epoch(model, train_loader, criterion, optimizer, device):
 
 
 # Main training function with early stopping and scheduler
-def _train_neural_network(data, num_epochs, patience, model_save_path, batch_size):
+def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, model_save_path, batch_size):
     device = NN_DEVICE
     logging.info(f"Using device: {device}")
 
@@ -94,7 +95,7 @@ def _train_neural_network(data, num_epochs, patience, model_save_path, batch_siz
 
 
 # Function to train the neural network for each cluster
-def _train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, patience, batch_size,
+def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_epochs, patience, batch_size,
                                model_weights_template):
     if max_epochs == 0:
         return
@@ -113,13 +114,13 @@ def _train_nn_for_all_clusters(surface_data_list: SurfaceDataList, max_epochs, p
         logging.info(f"--------------------Training neural network for cluster {cluster}...")
 
         # Train the neural network on the current cluster's data
-        _train_neural_network(surface_data_cluster.list, max_epochs, patience, model_weights_filepath, batch_size)
+        _train_neural_network(surface_data_cluster, max_epochs, patience, model_weights_filepath, batch_size)
 
         logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
 
 
 # Function to split data and create data loaders
-def _create_data_loaders(surface_data_list, batch_size):
+def _create_data_loaders(surface_data_list : SurfacePointsFrameList, batch_size):
     # Create an instance of SurfaceDataset using the provided surface_data_list
     dataset = NNDataset(surface_data_list)
 
@@ -172,7 +173,7 @@ def train_nn(train_config: TrainConfig):
 
     surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
     if surface_data_list is None or surface_data_list.list is None or not isinstance(surface_data_list,
-                                                                                     SurfaceDataList):
+                                                                                     SurfacePointsFrameList):
         logging.error("Surface data list could not be loaded. Exiting.")
         return
 

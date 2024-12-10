@@ -7,7 +7,10 @@ import trimesh
 from matplotlib import pyplot as plt
 from scipy.spatial import KDTree
 
+from data_processing.clustering_data_structures import ClusteredCenterPointsAllFrames
+from data_processing.mapping_data_structures import SurfacePointsFrameList, SurfacePointsFrame
 from src.utils.helpers import load_pickle_file, get_meshes_list
+from utils.helpers import get_file_index_from_filename
 
 
 # Restrict access to underscore-prefixed functions
@@ -17,210 +20,33 @@ def __getattr__(name):
     raise AttributeError(f"Module has no attribute {name}")
 
 
-def _convert_to_surface_data_list(input_list):
-    """
-    Converts a standard Python list into a SurfaceDataList.
-
-    Parameters:
-    - input_list: list of dictionaries or SurfaceData objects
-
-    Returns:
-    - SurfaceDataList instance
-    """
-    surface_data_objects = []
-
-    for item in input_list:
-        if isinstance(item, SurfaceData):
-            # Already a SurfaceData object
-            surface_data_objects.append(item)
-        else:
-            surface_data_objects.append(SurfaceData(item.points_list, item.labels_list, item.time))
-
-    return SurfaceDataList(surface_data_objects)
+# region DATA STRUCTURES
 
 
-class SurfaceDataList:
-    def __init__(self, surface_data_list: list):
-        if not isinstance(surface_data_list, list) or not all(
-                isinstance(item, SurfaceData) for item in surface_data_list):
-            raise TypeError("All items in surface_data_list must be instances of SurfaceData")
-        self.list = surface_data_list
-        # Initialize unique_clusters at creation
-        self.unique_clusters = self.compute_unique_clusters()
+# endregion
 
-    def assign_time_to_surfaces(self):
-        """Assign a time index to each surface data item if not already assigned."""
-        for i, surface_data in enumerate(self.list):
-            if surface_data.time is not None:
-                raise Exception("Time already added to surface data.")
+# region PRIVATE FUNCTIONS
 
-            surface_data.time = i
-
-    def normalize(self):
-        # todo test if it is working
-        """
-        Normalize the surface points for all objects in the list.
-        Normalize the data to the range [0, 1] for each axis and shift it to the origin (0, 0, 0).
-        :return: normalized_surface_points: SurfaceDataList
-        """
-        import numpy as np
-
-        def normalize_time(surface_data_list):
-            total_length = len(surface_data_list.list) - 1
-            for surface_data in surface_data_list.list:
-                surface_data.time /= total_length
-
-        def compute_shift_and_scale(surface_data_list):
-            # Combine all points for faster computation
-            all_points = np.vstack([surface_data.points_list for surface_data in surface_data_list.list])
-            min_corner = np.min(all_points, axis=0)
-            max_corner = np.max(all_points, axis=0)
-            shift_vector = (min_corner + max_corner) / 2
-            max_norm = np.linalg.norm(all_points - shift_vector, axis=1).max()
-            return shift_vector, max_norm
-
-        def shift_and_scale_points(surface_data_list, shift_vector, max_norm):
-            for surface_data in surface_data_list.list:
-                surface_data.points_list = (surface_data.points_list - shift_vector) / max_norm
-
-        # Normalize time for each object
-        normalize_time(self)
-
-        # Compute the shift vector and max norm
-        shift_vector, max_norm = compute_shift_and_scale(self)
-
-        # Shift points to origin and scale
-        shift_and_scale_points(self, shift_vector, max_norm)
-
-        return self
-
-    def get_unique_times(self):
-        """
-        Return the set of unique times.
-        """
-        return {surface_data.time for surface_data in self.list}
-
-    def filter_by_time(self, time_index):
-        """
-        :param time_index:
-        :return:
-        """
-        filtered_data = []
-        for surface_data in self.list:
-            if surface_data.time == time_index:
-                filtered_data.append(surface_data)
-
-        return SurfaceDataList(filtered_data)
-
-    def find_element_by_time(self, time_index):
-        """
-        Find the element in the list with the specified time index.
-        """
-        for surface_data in self.list:
-            if surface_data.time == time_index:
-                return surface_data
-        return None
-
-    def get_cluster_labels(self):
-        """
-        Return the list of cluster labels.
-        """
-        return [label for surface_data in self.list for label in surface_data.labels_list]
-
-    def compute_unique_clusters(self):
-        """
-        Private method to compute unique clusters from the surface data list.
-        """
-        unique_clusters = set()
-        for surface_data in self.list:
-            unique_clusters.update(
-                int(label) for label in surface_data.labels_list)  # Convert each sub-array to a tuple
-        return unique_clusters
-
-    def get_unique_clusters(self):
-        """
-        Return the set of unique clusters.
-        """
-        self.unique_clusters = self.compute_unique_clusters()
-
-        if self.unique_clusters is None or not self.unique_clusters:
-            raise Exception("Unique clusters is Empty")
-
-        return self.unique_clusters
-
-    def append(self, surface_data):
-        """
-        Append a SurfaceData object to the list and update unique clusters.
-        """
-        if not isinstance(surface_data, SurfaceData):
-            raise TypeError("surface_data must be an instance of SurfaceData")
-        self.list.append(surface_data)
-        self.unique_clusters.update(surface_data.labels_list)  # Update unique clusters
-
-    def remove(self, surface_data):
-        """
-        Remove a SurfaceData object from the list and update unique clusters.
-        """
-        if surface_data in self.list:
-            self.list.remove(surface_data)
-            # Recompute unique clusters in case a label is no longer present
-            self.unique_clusters = self.compute_unique_clusters()
-
-    # append function
-    def append(self, surface_data):
-        # check if surface_data is instance of SurfaceData
-        if not isinstance(surface_data, SurfaceData):
-            raise TypeError("surface_data must be an instance of SurfaceData")
-        self.list.append(surface_data)
-
-    def filter_by_label(self, label_index):
-        """
-        Filter the SurfaceDataList by the given label index, keeping only the corresponding surface points.
-
-        Parameters:
-        - label_index: int, the label index to filter by
-
-        Returns:
-        - SurfaceDataList instance containing only the SurfaceData objects with the specified label index in both
-          surface_labels_list and surface_points_list
-        """
-        filtered_data = []
-
-        for surface_data in self.list:
-            # Convert labels_list to a numpy array for efficient filtering
-            labels_array = np.array(surface_data.labels_list)
-            points_array = np.array(surface_data.points_list)
-
-            # Find indices where the label matches the specified label index
-            matching_indices = np.where(labels_array == label_index)[0]
-
-            if matching_indices.size == 0:
-                raise ValueError("No points with the specified label index found.")
-
-            # Use the indices to filter points and labels
-            filtered_points = points_array[matching_indices].tolist()
-            filtered_labels = labels_array[matching_indices].tolist()
-
-            # Create a new SurfaceData instance with the filtered points and labels
-            filtered_data.append(SurfaceData(filtered_points, filtered_labels, surface_data.time))
-
-        return SurfaceDataList(filtered_data)
-
-
-class SurfaceData:
-    """
-    Class to represents points in object for one cluster and for a single time step.
-    """
-
-    def __init__(self, surface_points, surface_labels=None, time=None):
-        self.points_list = surface_points
-        self.labels_list = surface_labels
-        self.time = time
-
-    def slice_arrays(self, id):
-        self.points_list = self.points_list[:id]
-        self.labels_list = self.labels_list[:id]
-        return self
+# def _convert_to_surface_data_list(input_list):
+#     """
+#     Converts a standard Python list into a SurfaceDataList.
+#
+#     Parameters:
+#     - input_list: list of dictionaries or SurfaceData objects
+#
+#     Returns:
+#     - SurfaceDataList instance
+#     """
+#     surface_data_objects = []
+#
+#     for item in input_list:
+#         if isinstance(item, SurfacePointsFrame):
+#             # Already a SurfaceData object
+#             surface_data_objects.append(item)
+#         else:
+#             surface_data_objects.append(SurfacePointsFrame(item.points_list, item.labels_list, item.time))
+#
+#     return SurfacePointsFrameList(surface_data_objects)
 
 
 #
@@ -257,7 +83,7 @@ class SurfaceData:
 #
 #     return surface_points, surface_labels
 
-def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, num_surface_points):
+def _create_categorized_surface_points(mesh, centers_points_frame, centers_labels_frame, num_surface_points):
     """
     Categorize random points on the surface of a mesh based on the closest point inside the mesh.
 
@@ -277,27 +103,33 @@ def _create_categorized_surface_points(mesh, clustered_points, cluster_labels, n
     # Extract mesh vertices and faces as NumPy arrays
     mesh_vertices = np.array(mesh.vertices)
     mesh_faces = np.array(mesh.faces)
-    clustered_points = np.array(clustered_points)
-    cluster_labels = np.array(cluster_labels)
 
     # Generate random points on the surface of the mesh
     surface_points = _generate_random_points_on_mesh(mesh_vertices, mesh_faces, num_surface_points)
 
-    # Build a KDTree for the clustered points
-    kdtree = KDTree(clustered_points)
-
-    # Find the closest clustered point for each surface point
-    _, indices = kdtree.query(surface_points)
-
-    # Assign the cluster label of the closest point to the surface point
-    surface_labels = cluster_labels[indices]
+    surface_labels = categorize_points_with_labels(centers_labels_frame, centers_points_frame, surface_points)
 
     # Return as NumPy arrays
     return np.array(surface_points), np.array(surface_labels)
 
 
-def _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list, cluster_center_labels,
-                                          num_surface_points):
+def categorize_points_with_labels(centers_labels_frame, centers_points_frame, points):
+    centers_points_frame = np.array(centers_points_frame)
+    centers_labels_frame = np.array(centers_labels_frame)
+    if centers_points_frame.shape[0] != centers_labels_frame.shape[0]:
+        raise ValueError("Shapes of points and labels do not match.")
+    # Build a KDTree for the clustered points
+    kdtree = KDTree(centers_points_frame)
+    # Find the closest clustered point for each surface point
+    _, indices = kdtree.query(points)
+    # Assign the cluster label of the closest point to the surface point
+    surface_labels = centers_labels_frame[indices]
+    # todo check if surface_labels is generated with same size as surface_points
+    return surface_labels
+
+
+def _create_surface_points_from_mesh_list(meshes_filepaths_list : list, clustered_data : ClusteredCenterPointsAllFrames,
+                                          num_surface_points : int):
     """
     Create surface points for each mesh in the list.
 
@@ -307,46 +139,54 @@ def _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_l
     Returns:
     - surface_points_list: list of np.ndarray, list of surface points for each mesh
     """
-    surface_data_list = SurfaceDataList([])
+    surface_data_list = SurfacePointsFrameList([])
+
+    # find min fileindex in meshes_filepaths_list
+    min_file_index = min([get_file_index_from_filename(mesh_file_path) for mesh_file_path in meshes_filepaths_list])
+
     for i, mesh_file_path in enumerate(meshes_filepaths_list):
         logging.info("Creating surface points for mesh " + str(i + 1) + " of " + str(len(meshes_filepaths_list)))
         mesh = trimesh.load(mesh_file_path)
-        centers_points = center_points_list[i]
-        surface_points, surface_labels = _create_categorized_surface_points(mesh, centers_points,
-                                                                            cluster_center_labels,
+        centers_points_frame = clustered_data.points_allframes[i]
+        center_labels_frame = clustered_data.labels_frame
+        #check indexes with filepath names
+
+        # file index is the last 3 characters before filetype
+        file_index = get_file_index_from_filename(mesh_file_path, min_file_index)
+
+        if file_index != i:
+            raise ValueError("Inconsistent index in file name. Expected: " + str(i) + ", Found: " + str(file_index))
+
+        surface_points, surface_labels = _create_categorized_surface_points(mesh, centers_points_frame,
+                                                                            center_labels_frame,
                                                                             num_surface_points)
         # append both values to list with names in the list
-        surface_data_list.append(SurfaceData(surface_points, surface_labels, None))
+        surface_data_list.append(SurfacePointsFrame(surface_points, surface_labels, None))
 
     return surface_data_list
 
 
-def _prepare_surface_data(meshes_filepaths_list, center_points_list, cluster_center_labels, num_surface_points):
+def _prepare_surface_data(meshes_filepaths_list, clustered_data, num_surface_points):
     logging.info("Creating surface points for all meshes...")
-    surface_data_list = _create_surface_points_from_mesh_list(meshes_filepaths_list, center_points_list,
-                                                              cluster_center_labels,
+    surface_data_list = _create_surface_points_from_mesh_list(meshes_filepaths_list, clustered_data,
                                                               num_surface_points)
 
-    surface_data_list.assign_time_to_surfaces()
-    surface_data_list.normalize()
+    surface_data_list.assign_time_to_all_elements()
+    surface_data_list.normalize_all_elements()
 
     return surface_data_list
 
 
 def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path):
-    center_points_list = clustered_data.points
-    cluster_center_labels = clustered_data.labels
-
     # meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
     meshes_filepaths_list = get_meshes_list(meshes_folder_path)
     logging.info("Creating surface points for all meshes...")
-    surface_data_list = _prepare_surface_data(meshes_filepaths_list, center_points_list,
-                                              cluster_center_labels, num_surface_points)
+    surface_data_list = _prepare_surface_data(meshes_filepaths_list, clustered_data, num_surface_points)
     logging.info("Surface points created and normalized.")
     return surface_data_list
 
 
-def _save_surface_data(clustered_data, num_surface_points, meshes_folder_path,
+def _save_surface_data(clustered_data : ClusteredCenterPointsAllFrames, num_surface_points, meshes_folder_path,
                        surface_data_filepath):
     surface_data_list = _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path)
 
@@ -469,14 +309,18 @@ def _visualize_surface_points(points, labels):
     plt.show()
 
 
+# endregion
+
+# endregion
+
 # Function to process and save neural network data if not already processed
 def process_surface_data(num_surface_points, meshes_folder_path, surface_data_filepath, clustered_data_filepath):
     if not os.path.exists(surface_data_filepath):
-        clustered_data = load_pickle_file(clustered_data_filepath)
-        if clustered_data is None:
+        clustered_centers = load_pickle_file(clustered_data_filepath)
+        if clustered_centers is None:
             logging.error("Clustered data could not be loaded. Exiting.")
             return
-        _save_surface_data(clustered_data, num_surface_points, meshes_folder_path, surface_data_filepath)
+        _save_surface_data(clustered_centers, num_surface_points, meshes_folder_path, surface_data_filepath)
         logging.info("Neural network data processed and saved.")
     else:
         logging.info("Neural network data already processed.")

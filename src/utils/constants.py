@@ -16,22 +16,22 @@ def __getattr__(name):
 
 # region CONSTANTS
 # region Neural network constants
-nn_max_epochs = 100
+nn_max_epochs = 5
 nn_patience = 5
 nn_batch_size = 128
 nn_lr = 1e-4
 nn_model = Simple_MLP_02()
 nn_optimizer = optim.Adam(nn_model.parameters(), lr=nn_lr)
 
-NN_DEVICE = torch.device('cuda')
+NN_DEVICE = torch.device('cpu')
 # endregion
 
 # region Data processing constants
 NUM_CLUSTERS = 5
 
-NUM_SURFACE_POINTS = 5000
+NUM_SURFACE_POINTS = 100
 
-TIME_STEPS = 100
+MAX_TIME_STEPS = 100
 
 RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 # endregion
@@ -52,8 +52,13 @@ center_metric_eval = "center_metric_eval.txt"
 center_metric_variances = "center_metric_variances.txt"
 mesh_shape_metrics = "mesh_shape_metrics.txt"
 
-default_raw_folderpath = '..\\data\\raw'
-default_processed_folderpath = "..\\data\\processed"
+current_absolutepath = os.path.dirname(os.path.abspath(__file__))
+data_absolutepath = os.path.join(current_absolutepath, "..", "..", "data")
+raw_foldername = "raw"
+processed_foldername = "processed"
+
+default_raw_folderpath = os.path.join(data_absolutepath, raw_foldername)
+default_processed_folderpath = os.path.join(data_absolutepath, processed_foldername)
 os.makedirs(default_processed_folderpath, exist_ok=True)
 
 
@@ -164,5 +169,5 @@ DEFAULT_NN_CONFIG = NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patienc
 
 DEFAULT_TRAIN_CONFIG = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername="default"),
-                                   num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS, time_steps=TIME_STEPS)
+                                   num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS, time_steps=MAX_TIME_STEPS)
 EVAL_NUM_SURFACE_POINTS = 1000

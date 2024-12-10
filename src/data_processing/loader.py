@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 
 from src.utils.constants import RAW_DATA_ALLOWED_FILETYPES_LIST
+from utils.helpers import get_file_index_from_filename
 
 
 # Restrict access to underscore-prefixed functions
@@ -24,21 +25,33 @@ def _euclidean_distance(p1, p2):
 # Function to load .xyz files
 def _load_xyz_files(filepaths):
     num_points_in_file = None
-    data = []
-    for filepath in filepaths:
-        points_in_time = np.loadtxt(filepath, delimiter=' ')  # Adjust delimiter if needed
-        if num_points_in_file is None:
-            num_points_in_file = points_in_time.shape[0]
-        elif num_points_in_file != points_in_time.shape[0]:
-            raise ValueError("Inconsistent number of points in the files.")
-        data.append(points_in_time)
+    points_allframes = []
 
-    return np.array(data), num_points_in_file  # Shape: (num_files, num_time_steps, num_points)
+    # find min fileindex in meshes_filepaths_list
+    min_file_index = min([get_file_index_from_filename(mesh_file_path) for mesh_file_path in filepaths])
+
+    for i, filepath in enumerate(filepaths):
+        pointslist_frame = np.loadtxt(filepath, delimiter=' ')  # Adjust delimiter if needed
+        if num_points_in_file is None:
+            num_points_in_file = pointslist_frame.shape[0]
+        elif num_points_in_file != pointslist_frame.shape[0]:
+            raise ValueError("Inconsistent number of points in the files.")
+        # check if index in filepath name is the same as index in list
+        file_index = get_file_index_from_filename(filepath, min_file_index)
+
+        points_allframes.append(pointslist_frame)
+
+        if i != file_index or (len(points_allframes) - 1) != file_index:
+            raise ValueError("Inconsistent index in file name.")
+
+
+    return np.array(points_allframes) # Shape: (num_files, num_time_steps, num_points)
 
     # Function to compute max distances between pairs of points across time
 
 
-def compute_max_distances_for_all_pairs(data, num_points_in_file):
+def compute_max_distances_for_all_pairs(center_points_allframes):
+    # todo check if it does what i want
     """
     Compute the maximum pairwise distances for all points in each file.
 
@@ -47,26 +60,28 @@ def compute_max_distances_for_all_pairs(data, num_points_in_file):
     - num_points_in_file: int, number of points in each file
 
     Returns:
-    - max_distances: np.ndarray of shape (num_points_in_file, num_points_in_file)
+    - max_distances_mx: np.ndarray of shape (num_points_in_file, num_points_in_file)
     """
 
-    max_distances = np.zeros((num_points_in_file, num_points_in_file))
+    num_points_in_file = center_points_allframes.shape[1]
 
-    size = len(data)
-    for i, file_data in enumerate(data):
+    max_distances_mx = np.zeros((num_points_in_file, num_points_in_file))
+
+    size = len(center_points_allframes)
+    for i, center_points_frame in enumerate(center_points_allframes):
         # Reshape row into list of 3D points
-        points = file_data.reshape(-1, 3)
+        points = center_points_frame.reshape(-1, 3)
 
         # Compute pairwise distances using broadcasting
         diff = points[:, None, :] - points[None, :, :]  # Pairwise differences
         distances = np.sqrt(np.sum(diff**2, axis=-1))  # Pairwise Euclidean distances
 
         # Update max distances
-        max_distances = np.maximum(max_distances, distances)
+        max_distances_mx = np.maximum(max_distances_mx, distances)
 
         logging.info(f"Computing max distances {i + 1} of {size}")
 
-    return max_distances
+    return max_distances_mx
 
 
 # Function for DBSCAN clustering using precomputed distances
@@ -86,10 +101,10 @@ def _load_bin_files(filepaths):
     logging.info("Loading .bin files...")
     data = []
     num_points_in_file = None
-    i = 0
-    for filepath in filepaths:
 
-        i += 1
+    min_file_index = min([get_file_index_from_filename(mesh_file_path) for mesh_file_path in filepaths])
+
+    for i, filepath in enumerate(filepaths):
         logging.info("Loading file " + str(i) + " of " + str(len(filepaths)))
         # Read the binary file as 32-bit floats
         file_data = np.fromfile(filepath, dtype=np.float32)
@@ -104,10 +119,16 @@ def _load_bin_files(filepaths):
         elif num_points_in_file != points.shape[0]:
             raise ValueError("Inconsistent number of points in the files.")
 
-        # Append the points for this file to the data list
+        # check if index in filepath name is the same as index in list
+        file_index = get_file_index_from_filename(filepath, min_file_index)
+
         data.append(points)
 
-    return data, num_points_in_file
+        if i != file_index or (len(data) - 1) != file_index:
+            raise ValueError("Inconsistent index in file name.")
+        # Append the points for this file to the data list
+
+    return data
 
 
 def load_centers_data(folder_path, time_steps):
@@ -115,9 +136,8 @@ def load_centers_data(folder_path, time_steps):
     Load .xyz files or .bin files from the specified folder and compute the maximum distances between points.
     :param folder_path: path to where is files with computed centers points
     :param file_type:
-    :return: max_distances, data
-        max_distances: array of maximum distances between all points of all centers
-        data: array of all centers points
+    :return:
+       data: np.ndarray of shape (num_files, num_time_steps, num_points, 3)
     """
     # find file types of all files in the folder
     file_types = []
@@ -149,10 +169,10 @@ def load_centers_data(folder_path, time_steps):
 
     # Load the .xyz files
     if file_type == 'xyz':
-        data, num_points_in_file = _load_xyz_files(filepaths)
+        points_allframes = _load_xyz_files(filepaths)
     elif file_type == 'bin':
-        data, num_points_in_file = _load_bin_files(filepaths)
+        points_allframes = _load_bin_files(filepaths)
     else:
         raise ValueError("Invalid file type. Use 'xyz' or 'bin'.")
 
-    return data, num_points_in_file
+    return points_allframes

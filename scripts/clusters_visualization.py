@@ -77,5 +77,5 @@ clustered_data = load_pickle_file(CLUSTERS_FILEPATH)
 original_points = np.loadtxt(ORIGINAL_POINTCLOUD_FILEPATH, delimiter=',')
 processed_points = np.loadtxt(PROCESSED_POINTCLOUD_FILEPATH, delimiter=',')
 
-_visualize_combined_surface_points_images(original_points, processed_points, IMAGE_SAVE_FOLDERPATH, clustered_data.labels)
+_visualize_combined_surface_points_images(original_points, processed_points, IMAGE_SAVE_FOLDERPATH, clustered_data.labels_frame)
 
