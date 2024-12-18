@@ -16,7 +16,7 @@ def __getattr__(name):
 
 # region CONSTANTS
 # region Neural network constants
-nn_max_epochs = 5
+nn_max_epochs = 10_000
 nn_patience = 5
 nn_batch_size = 128
 nn_lr = 1e-4
@@ -29,7 +29,7 @@ NN_DEVICE = torch.device('cpu')
 # region Data processing constants
 NUM_CLUSTERS = 5
 
-NUM_SURFACE_POINTS = 100
+NUM_SURFACE_POINTS = 10_000
 
 MAX_TIME_STEPS = 100
 
