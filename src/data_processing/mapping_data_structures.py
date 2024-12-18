@@ -78,7 +78,7 @@ class SurfacePointsFrameList:
 
 
 
-    def find_element_by_time_index(self, time_index):
+    def get_element_by_time_index(self, time_index):
         """
         Find the element in the list with the specified time index.
         """
@@ -103,7 +103,7 @@ class SurfacePointsFrameList:
 
         return filtered_list.list[0]
 
-    def find_element_by_time_value(self, time_index):
+    def get_element_by_time_value(self, time_index):
         """
         Find the element in the list with the specified time index.
         """
@@ -235,6 +235,12 @@ class SurfacePointsFrameList:
             selected_data.append(SurfacePointsFrame(selected_points, selected_labels, surface_data.time))
 
         return SurfacePointsFrameList(selected_data)
+
+    def get_time_list(self):
+        """
+        Return the list of time frames.
+        """
+        return [surface_data.time for surface_data in self.list]
 
 
 class TimeFrame:

@@ -354,7 +354,7 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
     unique_clusters = surface_data_list.get_unique_clusters()
 
     # select original points where time is 0
-    original_points_frame = surface_data_list.find_element_by_time_value(time)
+    original_points_frame = surface_data_list.get_element_by_time_value(time)
 
     for cluster in unique_clusters:
         # Load the original surface points for the current cluster
@@ -731,7 +731,7 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points):
                     for point in decoder_processed_points:
                         decoder_processed_points_timeframe.points_list.append(point)
 
-                    decoder_center_points_timeframe = center_points_timeframe.find_element_by_time_index(decoder_time)
+                    decoder_center_points_timeframe = center_points_timeframe.get_element_by_time_index(decoder_time)
 
                     decoder_pair_processed_center = find_closest_centers(decoder_center_points_timeframe,
                                                                          decoder_processed_points_timeframe)
@@ -815,13 +815,8 @@ def _compute_mesh_shape_metrics(surface_data_list : SurfacePointsFrameList, trai
             final_surface_data_list.append(SurfacePointsFrame(mesh_points, surface_labels, None))
         return final_surface_data_list
 
-    meshes_folder_path = train_config.file_path_config.raw_data_folderpath
-    meshes_filepaths_list = get_meshes_list(meshes_folder_path)
-
-    loaded_meshes_list = []
-    for mesh_filepath in meshes_filepaths_list:
-        mesh = trimesh.load(mesh_filepath)
-        loaded_meshes_list.append(mesh)
+    mesh_folder_path = train_config.file_path_config.raw_data_folderpath
+    loaded_meshes_list = get_loaded_meshes_list(mesh_folder_path)
 
     all_vertices = []
     for mesh in loaded_meshes_list:
@@ -870,6 +865,15 @@ def _compute_mesh_shape_metrics(surface_data_list : SurfacePointsFrameList, trai
         similarity_list.append({"time": time, "similarity": similarity})
 
     return similarity_list
+
+
+def get_loaded_meshes_list(meshes_folder_path : str):
+    meshes_filepaths_list = get_meshes_list(meshes_folder_path)
+    loaded_meshes_list = []
+    for mesh_filepath in meshes_filepaths_list:
+        mesh = trimesh.load(mesh_filepath)
+        loaded_meshes_list.append(mesh)
+    return loaded_meshes_list
 
 
 def convert_to_surfacepointsframelist(all_vertices):

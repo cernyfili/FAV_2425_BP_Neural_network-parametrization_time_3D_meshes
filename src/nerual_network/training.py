@@ -1,18 +1,23 @@
 import logging
+from typing import List
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
+import igl
 
+from nerual_network.evaluation import get_loaded_meshes_list
 from src.data_processing.clustering import process_clustered_data
 from src.data_processing.mapping import process_surface_data
-from data_processing.mapping_data_structures import SurfacePointsFrameList
+from data_processing.mapping_data_structures import SurfacePointsFrameList, TimeFrame
 from src.nerual_network.model import NNDataset, Simple_MLP_02
 from src.utils.constants import nn_optimizer, nn_model, TrainConfig, nn_lr
-from src.utils.helpers import load_pickle_file
+from src.utils.helpers import load_pickle_file, get_meshes_list
 from utils.constants import NN_DEVICE
+
+
 
 
 # Restrict access to underscore-prefixed functions
@@ -44,16 +49,104 @@ def _train_one_epoch(model, train_loader, criterion, optimizer, device):
 
     return train_loss / len(train_loader)  # Return average loss for the epoch
 
+def get_random_time(inputs):
+    # Extract the time column (assuming it's the 4th column)
+    time_column = inputs[:, 3]
+
+    # Select a random index
+    random_index = torch.randint(0, time_column.size(0), (1,)).item()
+
+    # Retrieve the time value at the selected index
+    random_time = time_column[random_index].item()
+
+    return random_time
+
+def one_way_chamfer_distance_loss(original_mesh_v, original_mesh_f, decoded_mesh_v):
+    """
+    Computes the one-way Chamfer Distance loss (decoded → original)
+    for vertices outside the original mesh.
+
+    Args:
+        original_mesh_v (torch.Tensor): Vertices of the original mesh (N x 3).
+        original_mesh_f (torch.Tensor): Faces of the original mesh (M x 3).
+        decoded_mesh_v (torch.Tensor): Vertices of the decoded mesh (K x 3).
+
+    Returns:
+        torch.Tensor: One-way Chamfer Distance loss.
+    """
+    # Convert PyTorch tensors to numpy arrays for IGL
+    original_mesh_v_np = original_mesh_v.detach().cpu().numpy()
+    original_mesh_f_np = original_mesh_f.detach().cpu().numpy()
+    decoded_mesh_v_np = decoded_mesh_v.detach().cpu().numpy()
+
+    # Compute signed distances and closest points (Decoded → Original)
+    distances, _, closest_points = igl.signed_distance(
+        decoded_mesh_v_np, original_mesh_v_np, original_mesh_f_np
+    )
+
+    # Convert distances to a PyTorch tensor
+    distances = torch.tensor(distances, device=decoded_mesh_v.device)
+
+    # Filter: Only consider points with positive signed distances (outside the mesh)
+    outside_distances = distances[distances > 0]
+
+    # Compute loss: Mean squared distance of outside points
+    loss = torch.mean(outside_distances ** 2) if len(outside_distances) > 0 else torch.tensor(0.0, device=decoded_mesh_v.device)
+
+    return loss
+
+
+# Function to perform one training epoch
+def _train_one_epoch_chamfer_distance(model, train_loader, optimizer, device, raw_data_folder : str, time_list : List[TimeFrame]):
+    #todo redo to be in constantt
+
+    model.to(device)
+    model.train()  # Set model to training mode
+    train_loss = 0
+    for inputs, targets in train_loader:
+        inputs, targets = inputs.float().to(device), targets.float().to(device)
+
+        # select one random time from inputs
+        time = get_random_time(inputs)
+
+        # Forward pass: Encoder and Decoder
+        encoded = model.encoder(inputs)        # Encodes to 2D
+
+        decoded_mesh_v = model.decoder(encoded, time)  # Decodes to 3D
+
+        time_index = next((time_element.index for time_element in time_list if time_element.value == time), None)
+
+        meshes_list = get_loaded_meshes_list(raw_data_folder)
+
+        selected_mesh = meshes_list[time_index]
+        original_mesh_v = selected_mesh.vertices
+        original_mesh_f = selected_mesh.faces
+
+        # Compute one-way Chamfer Distance loss
+        loss = one_way_chamfer_distance_loss(original_mesh_v, original_mesh_f, decoded_mesh_v)
+
+
+         # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping
+        optimizer.step()
+
+        train_loss += loss.item()
+
+    return train_loss / len(train_loader)  # Return average loss for the epoch
+
 
 # Main training function with early stopping and scheduler
-def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, model_save_path, batch_size):
+def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, model_save_path, batch_size, raw_data_folder):
     device = NN_DEVICE
     logging.info(f"Using device: {device}")
 
     train_loader, val_loader = _create_data_loaders(data, batch_size)
+    time_list = data.get_time_list() #todo check if naccaary
 
-    model = Simple_MLP_02() #todo check if is neacceaserry
-    optimizer = optim.Adam(model.parameters(), lr=nn_lr) #todo check if nacesesery
+    model = Simple_MLP_02()
+    optimizer = optim.Adam(model.parameters(), lr=nn_lr)
 
     # model = nn_model
     criterion = nn.MSELoss()
@@ -67,7 +160,7 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
 
     for epoch in range(1, num_epochs + 1):
         # Train and evaluate for one epoch
-        train_loss = _train_one_epoch(model, train_loader, criterion, optimizer, device)
+        train_loss = _train_one_epoch_chamfer_distance(model, train_loader, optimizer, device, raw_data_folder, time_list) #todo make it in constant
         val_loss = _evaluate(model, val_loader, criterion, device)
 
         # Learning rate scheduler step
@@ -96,7 +189,7 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
 
 # Function to train the neural network for each cluster
 def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_epochs, patience, batch_size,
-                               model_weights_template):
+                               model_weights_template, raw_data_folder):
     if max_epochs == 0:
         return
 
@@ -114,7 +207,7 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_ep
         logging.info(f"--------------------Training neural network for cluster {cluster}...")
 
         # Train the neural network on the current cluster's data
-        _train_neural_network(surface_data_cluster, max_epochs, patience, model_weights_filepath, batch_size)
+        _train_neural_network(surface_data_cluster, max_epochs, patience, model_weights_filepath, batch_size, raw_data_folder)
 
         logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
 
@@ -180,5 +273,6 @@ def train_nn(train_config: TrainConfig):
     _train_nn_for_all_clusters(surface_data_list, max_epochs=train_config.nn_config.max_epochs,
                                patience=train_config.nn_config.patience,
                                batch_size=train_config.nn_config.batch_size,
-                               model_weights_template=train_config.file_path_config.model_weights_folderpath)
+                               model_weights_template=train_config.file_path_config.model_weights_folderpath,
+                               raw_data_folder=train_config.file_path_config.raw_data_folderpath)
     logging.info("------------------TRAINING ENDED------------------")
