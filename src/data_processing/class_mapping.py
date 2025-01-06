@@ -1,3 +1,5 @@
+from typing import List
+
 import numpy as np
 
 
@@ -34,7 +36,7 @@ class SurfacePointsFrameList:
         """
         Normalize the surface points for all objects in the list.
         Normalize the data to the range [0, 1] for each axis and shift it to the origin (0, 0, 0).
-        :return: normalized_surface_points: SurfaceDataList
+        :return: normalized_surface_points:
         """
         import numpy as np
 
@@ -173,13 +175,13 @@ class SurfacePointsFrameList:
 
     def filter_by_label(self, label_index):
         """
-        Filter the SurfaceDataList by the given label index, keeping only the corresponding surface points.
+        Filter the  by the given label index, keeping only the corresponding surface points.
 
         Parameters:
         - label_index: int, the label index to filter by
 
         Returns:
-        - SurfaceDataList instance containing only the SurfaceData objects with the specified label index in both
+        -  instance containing only the SurfaceData objects with the specified label index in both
           surface_labels_list and surface_points_list
         """
         filtered_data = []
@@ -216,7 +218,7 @@ class SurfacePointsFrameList:
         - num_points: int, the number of points to select
 
         Returns:
-        - SurfaceDataList instance containing only the selected points
+        -  instance containing only the selected points
         """
         if num_points <= 0:
             raise ValueError("Number of points must be greater than 0.")
@@ -255,6 +257,18 @@ class TimeFrame:
     def __repr__(self):
         return f"TimeFrame(index={self.index}, value={self.value})"
 
+
+def time_frame_list_find_closest_element_index(time_frame_list: List[TimeFrame], time_value: float) -> int:
+    epsilon = (1 / len(time_frame_list)) / 4
+    closest_list = []
+    for time_frame in time_frame_list:
+        if abs(time_frame.value - time_value) < epsilon:
+            closest_list.append(time_frame)
+
+    if len(closest_list) != 1:
+        raise ValueError("Multiple elements found with the same time index.")
+
+    return closest_list[0].index
 
 class LabeledPoint:
     """

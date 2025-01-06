@@ -9,11 +9,10 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 
 from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame
-from nerual_network.evaluation import get_loaded_meshes_list, get_time_specific_decoder_data
 from src.nerual_network.class_model import NNDataset, Simple_MLP_02
 from src.utils.helpers import load_pickle_file
 from utils.constants import NN_DEVICE_STR, TrainConfig
-from utils.nn_config_utils import get_training_config
+from utils.nn_config_utils import get_training_config, get_time_specific_decoder_data, get_loaded_meshes_list
 
 
 # Restrict access to underscore-prefixed functions
@@ -55,8 +54,7 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
     device = torch.device(NN_DEVICE_STR)
     logging.info(f"Using device: {device}")
 
-    train_loader, val_loader = _create_data_loaders(data, batch_size)
-    time_list = data.get_time_list() #todo check if naccaary
+    train_loader, val_loader, time_frame_list = _create_data_loaders(data, batch_size)
 
     model, optimizer, loss_function = get_training_config(nn_lr)
 
@@ -69,9 +67,9 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
 
     for epoch in range(1, num_epochs + 1):
         # Train and evaluate for one epoch
-        loss_function_info = {'raw_data_folder': raw_data_folder, 'time_list': time_list, 'device': device}
+        loss_function_info = {'raw_data_folder': raw_data_folder, 'time_list': time_frame_list, 'device': device}
         train_loss = _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info)
-        val_loss = _evaluate(model, val_loader, loss_function, device)
+        val_loss = _evaluate(model, val_loader, loss_function, device, loss_function_info)
 
         # Learning rate scheduler step
         # scheduler.step(val_loss)
@@ -126,6 +124,7 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_ep
 def _create_data_loaders(surface_data_list : SurfacePointsFrameList, batch_size):
     # Create an instance of SurfaceDataset using the provided surface_data_list
     dataset = NNDataset(surface_data_list)
+    time_frame_list = surface_data_list.get_time_list()
 
     # Split indices for training and validation
     train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
@@ -138,18 +137,18 @@ def _create_data_loaders(surface_data_list : SurfacePointsFrameList, batch_size)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    return train_loader, val_loader
+    return train_loader, val_loader, time_frame_list
 
 
 # Function to evaluate the model on the validation set
-def _evaluate(model, val_loader, loss_function, device):
+def _evaluate(model, val_loader, loss_function, device, loss_function_info):
     model.eval()  # Set model to evaluation mode
     val_loss = 0
     with torch.no_grad():
         for inputs, targets in val_loader:
             inputs, targets = inputs.float().to(device), targets.float().to(device)
 
-            loss = loss_function(inputs, targets, model)
+            loss = loss_function(inputs, targets, model, loss_function_info)
             val_loss += loss.item()
     return val_loss / len(val_loader)  # Return average validation loss
 

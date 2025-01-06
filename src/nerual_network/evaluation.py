@@ -7,8 +7,6 @@ import trimesh
 from matplotlib import pyplot as plt
 from scipy.sparse import csgraph
 from scipy.sparse.linalg import eigsh
-from scipy.stats.tests.test_continuous_fit_censored import optimizer
-from torch import optim
 from torch.utils.data import DataLoader
 
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
@@ -17,10 +15,10 @@ from data_processing.mapping import categorize_points_with_labels
 from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
 from nerual_network.class_evaluation import PairPointCenterPoint, PairPointCenterPointList, DecoderElement, \
     DecoderPairList, EvaluationResult, EvaluationResultList
-from src.nerual_network.class_model import NNDataset, Simple_MLP_02
+from src.nerual_network.class_model import NNDataset
 from utils.constants import NN_DEVICE_STR, TrainConfig
-from utils.helpers import load_pickle_file, get_meshes_list
-from utils.nn_config_utils import get_training_config
+from utils.helpers import load_pickle_file
+from utils.nn_config_utils import get_training_config, get_time_specific_decoder_data, get_loaded_meshes_list
 
 
 # Restrict access to underscore-prefixed functions
@@ -423,14 +421,6 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
     return original_points_all, processed_points_all, cluster_labels
 
 
-def get_time_specific_decoder_data(device, encoded_features, time_value):
-    # Create a tensor of the same shape as the time feature in the input
-    time_tensor = torch.full((encoded_features.size(0), 1), time_value, dtype=torch.float32).to(device)
-    # Concatenate the encoded features with the time tensor
-    encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1).to(device)
-    return encoded_with_time
-
-
 def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images_save_folderpath, batch_size, nn_lr):
     def visualize_for_eachtime(original_points_all, processed_points_all, nn_lr):
 
@@ -667,7 +657,7 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
 
                     decoder_processed_points = decoded_output
                     decoder_processed_points_timeframe = SurfacePointsFrame([], None, decoder_time)
-                    # convert to SurfaceDataList
+                    # convert to
                     for point in decoder_processed_points:
                         decoder_processed_points_timeframe.points_list.append(point)
 
@@ -807,17 +797,8 @@ def _compute_mesh_shape_metrics(surface_data_list : SurfacePointsFrameList, trai
     return similarity_list
 
 
-def get_loaded_meshes_list(meshes_folder_path : str):
-    meshes_filepaths_list = get_meshes_list(meshes_folder_path)
-    loaded_meshes_list = []
-    for mesh_filepath in meshes_filepaths_list:
-        mesh = trimesh.load(mesh_filepath)
-        loaded_meshes_list.append(mesh)
-    return loaded_meshes_list
-
-
 def convert_to_surfacepointsframelist(all_vertices):
-    # transform mesh vertices to SurfaceDataList and normalize them and add time
+    # transform mesh vertices to  and normalize them and add time
     mesh_points_list = SurfacePointsFrameList([])
     for vertices in all_vertices:
         mesh_points = SurfacePointsFrame(vertices)
