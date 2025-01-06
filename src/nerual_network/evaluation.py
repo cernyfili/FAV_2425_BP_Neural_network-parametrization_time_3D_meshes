@@ -7,6 +7,7 @@ import trimesh
 from matplotlib import pyplot as plt
 from scipy.sparse import csgraph
 from scipy.sparse.linalg import eigsh
+from scipy.stats.tests.test_continuous_fit_censored import optimizer
 from torch import optim
 from torch.utils.data import DataLoader
 
@@ -19,6 +20,7 @@ from nerual_network.class_evaluation import PairPointCenterPoint, PairPointCente
 from src.nerual_network.class_model import NNDataset, Simple_MLP_02
 from utils.constants import NN_DEVICE_STR, TrainConfig
 from utils.helpers import load_pickle_file, get_meshes_list
+from utils.nn_config_utils import get_training_config
 
 
 # Restrict access to underscore-prefixed functions
@@ -283,8 +285,7 @@ def _load_trained_model(model_weights_filepath, nn_lr):
         model (nn.Module): The loaded neural network model.
     """
     # Load the checkpoint
-    model = Simple_MLP_02() #TODO change
-    optimizer = optim.Adam(model.parameters(), lr=nn_lr) # todo change
+    model, optimizer, loss_function = get_training_config(nn_lr)
 
     checkpoint = torch.load(model_weights_filepath)  # Load the checkpoint
     model.load_state_dict(checkpoint['model_state_dict'])  # Load the model state

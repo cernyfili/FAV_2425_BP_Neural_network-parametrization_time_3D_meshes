@@ -9,6 +9,7 @@ def __getattr__(name):
     raise AttributeError(f"Module has no attribute {name}")
 
 
+
 # region CONSTANTS
 # region Neural network constants
 nn_max_epochs = 10_000

@@ -13,6 +13,7 @@ from nerual_network.evaluation import get_loaded_meshes_list, get_time_specific_
 from src.nerual_network.class_model import NNDataset, Simple_MLP_02
 from src.utils.helpers import load_pickle_file
 from utils.constants import NN_DEVICE_STR, TrainConfig
+from utils.nn_config_utils import get_training_config
 
 
 # Restrict access to underscore-prefixed functions
@@ -22,8 +23,9 @@ def __getattr__(name):
     raise AttributeError(f"Module has no attribute {name}")
 
 
+# region TRAIN ONE EPOCH - different loss functions
 # Function to perform one training epoch
-def _train_one_epoch(model, train_loader, criterion, optimizer, device):
+def _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info):
     model.to(device)
     model.train()  # Set model to training mode
     train_loss = 0
@@ -31,8 +33,7 @@ def _train_one_epoch(model, train_loader, criterion, optimizer, device):
         inputs, targets = inputs.float().to(device), targets.float().to(device)
 
         # Forward pass
-        outputs = model(inputs)
-        loss = criterion(outputs, targets)
+        loss = loss_function(inputs, targets, model, loss_function_info)
 
         # Backward pass and optimization
         optimizer.zero_grad()
@@ -43,95 +44,10 @@ def _train_one_epoch(model, train_loader, criterion, optimizer, device):
         train_loss += loss.item()
 
     return train_loss / len(train_loader)  # Return average loss for the epoch
-
-def get_random_time(inputs):
-    # Extract the time column (assuming it's the 4th column)
-    time_column = inputs[:, 3]
-
-    # Select a random index
-    random_index = torch.randint(0, time_column.size(0), (1,)).item()
-
-    # Retrieve the time value at the selected index
-    random_time = time_column[random_index].item()
-
-    return random_time
-
-def one_way_chamfer_distance_loss(original_mesh_v, original_mesh_f, decoded_mesh_v):
-    """
-    Computes the one-way Chamfer Distance loss (decoded → original)
-    for vertices outside the original mesh.
-
-    Args:
-        original_mesh_v (torch.Tensor): Vertices of the original mesh (N x 3).
-        original_mesh_f (torch.Tensor): Faces of the original mesh (M x 3).
-        decoded_mesh_v (torch.Tensor): Vertices of the decoded mesh (K x 3).
-
-    Returns:
-        torch.Tensor: One-way Chamfer Distance loss.
-    """
-    # Convert PyTorch tensors to numpy arrays for IGL
-    original_mesh_v_np = original_mesh_v.detach().cpu().numpy()
-    original_mesh_f_np = original_mesh_f.detach().cpu().numpy()
-    decoded_mesh_v_np = decoded_mesh_v.detach().cpu().numpy()
-
-    # Compute signed distances and closest points (Decoded → Original)
-    distances, _, closest_points = igl.signed_distance(
-        decoded_mesh_v_np, original_mesh_v_np, original_mesh_f_np
-    )
-
-    # Convert distances to a PyTorch tensor
-    distances = torch.tensor(distances, device=decoded_mesh_v.device)
-
-    # Filter: Only consider points with positive signed distances (outside the mesh)
-    outside_distances = distances[distances > 0]
-
-    # Compute loss: Mean squared distance of outside points
-    loss = torch.mean(outside_distances ** 2) if len(outside_distances) > 0 else torch.tensor(0.0, device=decoded_mesh_v.device)
-
-    return loss
+# endregion
 
 
-# Function to perform one training epoch
-def _train_one_epoch_chamfer_distance(model, train_loader, optimizer, device, raw_data_folder : str, time_list : List[TimeFrame]):
-    #todo redo to be in constantt
 
-    model.to(device)
-    model.train()  # Set model to training mode
-    train_loss = 0
-    for inputs, targets in train_loader:
-        inputs, targets = inputs.float().to(device), targets.float().to(device)
-
-        # select one random time from inputs
-        time = get_random_time(inputs)
-
-        # Forward pass: Encoder and Decoder
-        encoded = model.encoder(inputs)
-
-        decoder_data = get_time_specific_decoder_data(device=device, encoded_features=encoded, time_value=time)
-
-        decoded_mesh_v = model.decoder(decoder_data)  # Decodes to 3D
-
-        time_index = next((time_element.index for time_element in time_list if time_element.value == time), None)
-
-        meshes_list = get_loaded_meshes_list(raw_data_folder)
-
-        selected_mesh = meshes_list[time_index]
-        original_mesh_v = selected_mesh.vertices
-        original_mesh_f = selected_mesh.faces
-
-        # Compute one-way Chamfer Distance loss
-        loss = one_way_chamfer_distance_loss(original_mesh_v, original_mesh_f, decoded_mesh_v)
-
-
-         # Backward pass and optimization
-        optimizer.zero_grad()
-        loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping
-        optimizer.step()
-
-        train_loss += loss.item()
-
-    return train_loss / len(train_loader)  # Return average loss for the epoch
 
 
 # Main training function with early stopping and scheduler
@@ -142,12 +58,8 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
     train_loader, val_loader = _create_data_loaders(data, batch_size)
     time_list = data.get_time_list() #todo check if naccaary
 
-    model = Simple_MLP_02()
-    optimizer = optim.Adam(model.parameters(), lr=nn_lr)
+    model, optimizer, loss_function = get_training_config(nn_lr)
 
-    # model = nn_model
-    criterion = nn.MSELoss()
-    # optimizer = nn_optimizer
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
 
     best_val_loss = float('inf')
@@ -157,8 +69,9 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
 
     for epoch in range(1, num_epochs + 1):
         # Train and evaluate for one epoch
-        train_loss = _train_one_epoch_chamfer_distance(model, train_loader, optimizer, device, raw_data_folder, time_list) #todo make it in constant
-        val_loss = _evaluate(model, val_loader, criterion, device)
+        loss_function_info = {'raw_data_folder': raw_data_folder, 'time_list': time_list, 'device': device}
+        train_loss = _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info)
+        val_loss = _evaluate(model, val_loader, loss_function, device)
 
         # Learning rate scheduler step
         # scheduler.step(val_loss)
@@ -229,14 +142,14 @@ def _create_data_loaders(surface_data_list : SurfacePointsFrameList, batch_size)
 
 
 # Function to evaluate the model on the validation set
-def _evaluate(model, val_loader, criterion, device):
+def _evaluate(model, val_loader, loss_function, device):
     model.eval()  # Set model to evaluation mode
     val_loss = 0
     with torch.no_grad():
         for inputs, targets in val_loader:
             inputs, targets = inputs.float().to(device), targets.float().to(device)
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
+
+            loss = loss_function(inputs, targets, model)
             val_loss += loss.item()
     return val_loss / len(val_loader)  # Return average validation loss
 
