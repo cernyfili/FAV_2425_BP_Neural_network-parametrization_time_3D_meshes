@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 from scipy.cluster.hierarchy import fcluster, linkage
 
-from data_processing.clustering_data_structures import ClusteredCenterPointsAllFrames
+from data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from src.data_processing.loader import load_centers_data, compute_max_distances_for_all_pairs
 
 

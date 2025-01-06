@@ -191,9 +191,9 @@ class SurfacePointsFrameList:
 
             # Find indices where the label matches the specified label index
             matching_indices = np.where(labels_array == label_index)[0]
-
-            if matching_indices.size == 0:
-                raise ValueError("No points with the specified label index found.")
+            #
+            # if matching_indices.size == 0:
+            #     raise ValueError("No points with the specified label index found.")
 
             # Use the indices to filter points and labels
             filtered_points = points_array[matching_indices].tolist()

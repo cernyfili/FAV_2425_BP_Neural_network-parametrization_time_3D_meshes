@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 
-from data_processing.mapping_data_structures import SurfacePointsFrameList
+from data_processing.class_mapping import SurfacePointsFrameList
 
 
 # Restrict access to underscore-prefixed functions

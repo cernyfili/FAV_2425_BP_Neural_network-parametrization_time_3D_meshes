@@ -7,8 +7,8 @@ import trimesh
 from matplotlib import pyplot as plt
 from scipy.spatial import KDTree
 
-from data_processing.clustering_data_structures import ClusteredCenterPointsAllFrames
-from data_processing.mapping_data_structures import SurfacePointsFrameList, SurfacePointsFrame
+from data_processing.class_clustering import ClusteredCenterPointsAllFrames
+from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
 from src.utils.helpers import load_pickle_file, get_meshes_list
 from utils.helpers import get_file_index_from_filename
 
@@ -250,7 +250,7 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
     v0 = vertices[faces[:, 0]]
     v1 = vertices[faces[:, 1]]
     v2 = vertices[faces[:, 2]]
-    cross_products = np.cross(v1 - v0, v2 - v0)
+    cross_products = np.cross(v1 - v0, v2 - v0) #todo check why inreachable
     areas = 0.5 * np.linalg.norm(cross_products, axis=1)
     total_area = np.sum(areas)
     probabilities = areas / total_area

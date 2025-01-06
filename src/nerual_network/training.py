@@ -1,23 +1,18 @@
 import logging
 from typing import List
 
+import igl
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
-import igl
 
-from nerual_network.evaluation import get_loaded_meshes_list
-from src.data_processing.clustering import process_clustered_data
-from src.data_processing.mapping import process_surface_data
-from data_processing.mapping_data_structures import SurfacePointsFrameList, TimeFrame
-from src.nerual_network.model import NNDataset, Simple_MLP_02
-from src.utils.constants import nn_optimizer, nn_model, TrainConfig, nn_lr
-from src.utils.helpers import load_pickle_file, get_meshes_list
-from utils.constants import NN_DEVICE
-
-
+from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame
+from nerual_network.evaluation import get_loaded_meshes_list, get_time_specific_decoder_data
+from src.nerual_network.class_model import NNDataset, Simple_MLP_02
+from src.utils.helpers import load_pickle_file
+from utils.constants import NN_DEVICE_STR, TrainConfig
 
 
 # Restrict access to underscore-prefixed functions
@@ -110,9 +105,11 @@ def _train_one_epoch_chamfer_distance(model, train_loader, optimizer, device, ra
         time = get_random_time(inputs)
 
         # Forward pass: Encoder and Decoder
-        encoded = model.encoder(inputs)        # Encodes to 2D
+        encoded = model.encoder(inputs)
 
-        decoded_mesh_v = model.decoder(encoded, time)  # Decodes to 3D
+        decoder_data = get_time_specific_decoder_data(device=device, encoded_features=encoded, time_value=time)
+
+        decoded_mesh_v = model.decoder(decoder_data)  # Decodes to 3D
 
         time_index = next((time_element.index for time_element in time_list if time_element.value == time), None)
 
@@ -138,8 +135,8 @@ def _train_one_epoch_chamfer_distance(model, train_loader, optimizer, device, ra
 
 
 # Main training function with early stopping and scheduler
-def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, model_save_path, batch_size, raw_data_folder):
-    device = NN_DEVICE
+def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, model_save_path, batch_size, raw_data_folder, nn_lr):
+    device = torch.device(NN_DEVICE_STR)
     logging.info(f"Using device: {device}")
 
     train_loader, val_loader = _create_data_loaders(data, batch_size)
@@ -189,7 +186,7 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
 
 # Function to train the neural network for each cluster
 def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_epochs, patience, batch_size,
-                               model_weights_template, raw_data_folder):
+                               model_weights_template, raw_data_folder, nn_lr):
     if max_epochs == 0:
         return
 
@@ -207,7 +204,7 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_ep
         logging.info(f"--------------------Training neural network for cluster {cluster}...")
 
         # Train the neural network on the current cluster's data
-        _train_neural_network(surface_data_cluster, max_epochs, patience, model_weights_filepath, batch_size, raw_data_folder)
+        _train_neural_network(surface_data_cluster, max_epochs, patience, model_weights_filepath, batch_size, raw_data_folder, nn_lr)
 
         logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
 
@@ -274,5 +271,6 @@ def train_nn(train_config: TrainConfig):
                                patience=train_config.nn_config.patience,
                                batch_size=train_config.nn_config.batch_size,
                                model_weights_template=train_config.file_path_config.model_weights_folderpath,
-                               raw_data_folder=train_config.file_path_config.raw_data_folderpath)
+                               raw_data_folder=train_config.file_path_config.raw_data_folderpath,
+                               nn_lr=train_config.nn_config.nn_lr)
     logging.info("------------------TRAINING ENDED------------------")

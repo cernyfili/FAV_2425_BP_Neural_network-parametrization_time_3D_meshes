@@ -2,5 +2,9 @@ pandas
 matplotlib
 opencv-python
 trimesh
-torch
 numpy
+
+igl
+scipy
+setuptools
+sckit-learn

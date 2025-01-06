@@ -1,10 +1,5 @@
 import os
 from datetime import datetime
-from src.nerual_network.model import Simple_MLP_02
-import torch.optim as optim
-import torch
-
-
 
 
 # Restrict access to only uppercase constants
@@ -20,10 +15,10 @@ nn_max_epochs = 10_000
 nn_patience = 5
 nn_batch_size = 128
 nn_lr = 1e-4
-nn_model = Simple_MLP_02()
-nn_optimizer = optim.Adam(nn_model.parameters(), lr=nn_lr)
+#nn_model = Simple_MLP_02()
+#nn_optimizer = optim.Adam(nn_model.parameters(), lr=nn_lr)
 
-NN_DEVICE = torch.device('cpu')
+NN_DEVICE_STR = 'cpu'
 # endregion
 
 # region Data processing constants
@@ -86,19 +81,29 @@ os.makedirs(default_processed_folderpath, exist_ok=True)
 
 
 # region DATA STRUCTURES
+
+
+# endregion
+
+
 class NNConfig:
-    def __init__(self, nn_max_epochs: int, nn_patience: int, nn_batch_size: int, nn_model, nn_optimizer):
+    def __init__(self, nn_max_epochs: int, nn_patience: int, nn_batch_size: int, nn_model, nn_optimizer, nn_lr : float):
         self.max_epochs = nn_max_epochs
         self.patience = nn_patience
         self.batch_size = nn_batch_size
         self.model = nn_model
         self.optimizer = nn_optimizer
+        self.nn_lr : float = nn_lr
 
     def __str__(self):
         return f"NNConfig(nn_max_epochs={self.max_epochs}, nn_patience={self.patience}, nn_batch_size={self.batch_size}, nn_model={self.model}, nn_optimizer={self.optimizer})"
 
     def __repr__(self):
         return f"NNConfig(nn_max_epochs={self.max_epochs}, nn_patience={self.patience}, nn_batch_size={self.batch_size}, nn_model={self.model}, nn_optimizer={self.optimizer})"
+
+
+DEFAULT_NN_CONFIG = NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patience, nn_batch_size=nn_batch_size,
+                             nn_model=None, nn_optimizer=None, nn_lr=nn_lr)
 
 
 class FilePathConfig:
@@ -160,12 +165,6 @@ class TrainConfig:
     def __repr__(self):
         return f"TrainConfig(num_clusters={self.num_clusters}, num_surface_points={self.num_surface_points}, nn_config={self.nn_config}, file_path_config={self.file_path_config}, time_steps={self.time_steps})"
 
-
-# endregion
-
-
-DEFAULT_NN_CONFIG = NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patience, nn_batch_size=nn_batch_size,
-                             nn_model=nn_model, nn_optimizer=nn_optimizer)
 
 DEFAULT_TRAIN_CONFIG = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername="default"),
