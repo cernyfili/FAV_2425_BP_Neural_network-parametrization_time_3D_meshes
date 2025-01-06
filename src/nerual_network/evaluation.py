@@ -844,7 +844,7 @@ def evaluate(train_config: TrainConfig):
 
     # region Visulize
 
-    _visualize_uv_points_in_3d(surface_data_list, model_weights_template, os.path.join(images_save_folderpath, "time_uv_points"), batch_size, nn_lr)
+#    _visualize_uv_points_in_3d(surface_data_list, model_weights_template, os.path.join(images_save_folderpath, "time_uv_points"), batch_size, nn_lr)
 
     original_points_all, processed_points_all, cluster_labels = _prepare_export_data(surface_data_list,
                                                                                      model_weights_template,

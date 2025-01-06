@@ -65,7 +65,8 @@ def __one_way_chamfer_distance_loss(original_mesh_v: torch.Tensor, original_mesh
     selected_decoded_points = decoded_mesh_v[outside_indices]
 
     # Compute MSE between selected decoded_mesh points and original_mesh points
-    mse_loss = nn.MSELoss(selected_decoded_points, original_mesh_v)
+    # todo fix
+    mse_loss = nn.MSELoss()(selected_decoded_points, original_mesh_v)
 
     return mse_loss
 
@@ -111,7 +112,7 @@ def _loss_function_chamfer(inputs, targets, model, loss_info):
 def get_training_config(nn_lr) -> (nn.Module, optim.Optimizer, nn.Module):
     model = Simple_MLP_02()
     optimizer = optim.Adam(model.parameters(), lr=nn_lr)
-    loss_function = _loss_function_standard
+    loss_function = _loss_function_chamfer
     return model, optimizer, loss_function
 
 
