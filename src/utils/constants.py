@@ -19,7 +19,7 @@ nn_lr = 1e-4
 #nn_model = Simple_MLP_02()
 #nn_optimizer = optim.Adam(nn_model.parameters(), lr=nn_lr)
 
-NN_DEVICE_STR = 'cuda'
+NN_DEVICE_STR = 'cpu'
 # endregion
 
 # region Data processing constants

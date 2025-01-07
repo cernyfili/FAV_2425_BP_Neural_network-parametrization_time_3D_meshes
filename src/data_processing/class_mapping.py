@@ -259,11 +259,14 @@ class TimeFrame:
 
 
 def time_frame_list_find_closest_element_index(time_frame_list: List[TimeFrame], time_value: float) -> int:
+    if time_value == 0.0:
+        return 0
+
     epsilon = (1 / len(time_frame_list)) / 4
     closest_list = []
     for time_frame in time_frame_list:
         if abs(time_frame.value - time_value) < epsilon:
-            closest_list.append(time_frame)
+            return time_frame.index
 
     if len(closest_list) != 1:
         raise ValueError("Multiple elements found with the same time index.")

@@ -31,8 +31,9 @@ def __get_random_time(inputs):
     return random_time
 
 
-def __one_way_chamfer_distance_loss(original_mesh_v: torch.Tensor, original_mesh_f: torch.Tensor,
-                                    decoded_mesh_v: torch.Tensor):
+# region COMPUTE LOSS VALUE FUNCTIONS
+def __compute_loss_one_way_chamfer_distance(original_mesh_v: torch.Tensor, original_mesh_f: torch.Tensor,
+                                            decoded_mesh_v: torch.Tensor):
     """
     Computes the one-way Chamfer Distance loss (decoded → original)
     for vertices outside the original mesh.
@@ -61,15 +62,30 @@ def __one_way_chamfer_distance_loss(original_mesh_v: torch.Tensor, original_mesh
     # Filter: Only consider points with positive signed distances (outside the mesh)
     outside_indices = distances > 0
 
-    # Select corresponding points from decoded_mesh_v and original_mesh_v
-    selected_decoded_points = decoded_mesh_v[outside_indices]
+
+    # Create tensors of the same size as decoded_mesh_v
+    selected_decoded_points = torch.zeros_like(decoded_mesh_v)
+    selected_closest_points = torch.zeros_like(decoded_mesh_v)
+
+    # Convert closest_points to the same dtype as decoded_mesh_v
+    closest_points_tensor = torch.tensor(closest_points, device=decoded_mesh_v.device, dtype=decoded_mesh_v.dtype)
+
+    # Assign values only for points outside the mesh
+    selected_decoded_points[outside_indices] = decoded_mesh_v[outside_indices]
+    selected_closest_points[outside_indices] = closest_points_tensor[outside_indices]
 
     # Compute MSE between selected decoded_mesh points and original_mesh points
-    # todo fix
-    mse_loss = nn.MSELoss()(selected_decoded_points, original_mesh_v)
+    mse_loss = nn.MSELoss()(selected_decoded_points, selected_closest_points)
 
     return mse_loss
 
+def __compute_loss_uv_streach(inputs, model, targets):
+    area_coefficient = 1.0
+    mse_area_loss = mse_area(area_coefficient)
+    # outputs = model(inputs)
+    loss = mse_area_loss(targets, inputs, model.encoder)
+    return loss
+# endregion
 
 # region LOSS FUNCTIONS
 def _loss_function_standard(inputs, targets, model, loss_info):
@@ -79,31 +95,76 @@ def _loss_function_standard(inputs, targets, model, loss_info):
 
 
 def _loss_function_chamfer(inputs, targets, model, loss_info):
+    def __prepare_data(device, inputs, model, raw_data_folder, time_list):
+        # select one random time from inputs
+        time = __get_random_time(inputs)
+        # Forward pass: Encoder and Decoder
+        encoded = model.encoder(inputs)
+        decoder_data = get_time_specific_decoder_data(device=device, encoded_features=encoded, time_value=time)
+        decoded_mesh_v = model.decoder(decoder_data)  # Decodes to 3D
+        time_index = time_frame_list_find_closest_element_index(time_list, time)
+        if not time_index:
+            raise Exception("Time index has to be defined")
+        meshes_list = get_loaded_meshes_list(raw_data_folder)
+        selected_mesh = meshes_list[time_index]
+        original_mesh_v = selected_mesh.vertices
+        original_mesh_f = selected_mesh.faces
+        # convert original_mesh_v to a PyTorch tensor
+        original_mesh_v = torch.tensor(original_mesh_v, device=device)
+        original_mesh_f = torch.tensor(original_mesh_f, device=device)
+        return decoded_mesh_v, original_mesh_f, original_mesh_v
+
     raw_data_folder = loss_info['raw_data_folder']
     time_list = loss_info['time_list']
     device = loss_info['device']
 
-    # select one random time from inputs
-    time = __get_random_time(inputs)
-    # Forward pass: Encoder and Decoder
-    encoded = model.encoder(inputs)
-    decoder_data = get_time_specific_decoder_data(device=device, encoded_features=encoded, time_value=time)
-    decoded_mesh_v = model.decoder(decoder_data)  # Decodes to 3D
-    time_index = time_frame_list_find_closest_element_index(time_list, time)
-    if not time_index:
-        raise Exception("Time index has to be defined")
-    meshes_list = get_loaded_meshes_list(raw_data_folder)
-    selected_mesh = meshes_list[time_index]
-    original_mesh_v = selected_mesh.vertices
-    original_mesh_f = selected_mesh.faces
-
-    # convert original_mesh_v to a PyTorch tensor
-    original_mesh_v = torch.tensor(original_mesh_v, device=device)
-    original_mesh_f = torch.tensor(original_mesh_f, device=device)
+    decoded_mesh_v, original_mesh_f, original_mesh_v = __prepare_data(device, inputs, model, raw_data_folder, time_list)
     # Compute one-way Chamfer Distance loss
-    loss_chamfer = __one_way_chamfer_distance_loss(original_mesh_v, original_mesh_f, decoded_mesh_v)
+    # original_mesh_v = torch.tensor(original_mesh_v, device=device, requires_grad=False)
+    # original_mesh_f = torch.tensor(original_mesh_f, device=device, requires_grad=False)
+
+    loss_chamfer = __compute_loss_one_way_chamfer_distance(original_mesh_v, original_mesh_f, decoded_mesh_v)
+    print(f"Chamfer loss: {loss_chamfer}")
     loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
-    return loss_chamfer + loss_standard
+    # todo change
+    return loss_chamfer
+
+
+
+
+
+def mse_area(area_coefficient):
+    def mse_area(x_true, x_pred, encoder):
+        diff_pos = torch.sum(torch.square(x_true - x_pred), dim=1).mean()
+
+        x_var = torch.autograd.Variable(x_pred, requires_grad=True)
+        uv_pred = encoder(x_var)
+        u_pred = uv_pred[::, 0]
+        v_pred = uv_pred[::, 1]
+        g_u = torch.autograd.grad(outputs=u_pred, inputs=x_var, grad_outputs=torch.ones_like(u_pred),
+                                  retain_graph=True, allow_unused=True, create_graph=True)[0]
+        g_v = torch.autograd.grad(outputs=v_pred, inputs=x_var, grad_outputs=torch.ones_like(v_pred),
+                                  retain_graph=True, allow_unused=True, create_graph=True)[0]
+
+        e = torch.sum(g_u * g_u, dim=1)
+        f = torch.sum(g_u * g_v, dim=1)
+        g = torch.sum(g_v * g_v, dim=1)
+        det_i = e * g - f * f
+        diff_area = -det_i.mean()  # Use negative mean to maximize det_i
+
+        return diff_pos + area_coefficient * diff_area
+
+    return mse_area
+
+
+def _loss_function_uv_streach(inputs, targets, model, loss_info):
+    loss_uv_streach = __compute_loss_uv_streach(inputs, model, targets)
+    loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
+
+    return loss_uv_streach + loss_standard
+
+
+
 
 
 # endregion
