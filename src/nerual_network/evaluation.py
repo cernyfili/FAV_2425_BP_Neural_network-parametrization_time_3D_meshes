@@ -18,7 +18,7 @@ from nerual_network.class_evaluation import PairPointCenterPoint, PairPointCente
 from src.nerual_network.class_model import NNDataset
 from utils.constants import NN_DEVICE_STR, TrainConfig
 from utils.helpers import load_pickle_file
-from utils.nn_config_utils import get_training_config, get_time_specific_decoder_data, get_loaded_meshes_list
+from utils.nn_config_utils import get_training_config, get_time_specific_decoder_input_data, get_loaded_meshes_list
 
 
 # Restrict access to underscore-prefixed functions
@@ -393,7 +393,7 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
                 raise Exception("Not same time")
 
             time_value = surface_points_frame.time.value
-            encoded_with_time = get_time_specific_decoder_data(device, encoded_features, time_value)
+            encoded_with_time = get_time_specific_decoder_input_data(device, encoded_features, time_value)
 
             # Pass through the decoder
             decoded_output = model.decoder(encoded_with_time)
@@ -459,7 +459,7 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
 
             visualize_for_one_time(images_save_folderpath, rgb_colors,
                                    processed_points_slice,
-                                   f'time_{i}_uv_color_representation.png', time, nn_lr)
+                                   f'time_{i}_uv_color_representation.png', time)
 
     def visualize_for_one_time(images_save_folderpath, rgb_colors, processed_points_slice, image_name, time):
         # visualize point cloud for original point and make the color of the point based on the processed_points
@@ -844,7 +844,7 @@ def evaluate(train_config: TrainConfig):
 
     # region Visulize
 
-#    _visualize_uv_points_in_3d(surface_data_list, model_weights_template, os.path.join(images_save_folderpath, "time_uv_points"), batch_size, nn_lr)
+    _visualize_uv_points_in_3d(surface_data_list, model_weights_template, os.path.join(images_save_folderpath, "time_uv_points"), batch_size, nn_lr)
 
     original_points_all, processed_points_all, cluster_labels = _prepare_export_data(surface_data_list,
                                                                                      model_weights_template,

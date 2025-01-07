@@ -1,9 +1,10 @@
 from nerual_network.evaluation import evaluate
 from utils.constants import DEFAULT_NN_CONFIG, FilePathConfig, TrainConfig
 
-PROCESSED_SESSION_FOLDERPATH = 'data\\processed\\ball\\ball_20241203'
-RAW_FOLDERPATH = "data\\raw"
-PROCESSED_FOLDERPATH = "data\\processed"
+# "C:\Users\RDClient\Documents\GitHub\FAV_BP_24_25_Parametrization\data\processed\ball\ball_20241210"
+PROCESSED_SESSION_FOLDERPATH = '..\\data\\processed\\ball\\ball_20241210'
+RAW_FOLDERPATH = "..\\data\\raw"
+PROCESSED_FOLDERPATH = "..\\data\\processed"
 DATA_FOLDERNAME = 'ball'
 
 TRAIN_CONFIG = TrainConfig(nn_config=DEFAULT_NN_CONFIG,

@@ -7,6 +7,8 @@ Created: 06.01.2025
 Version: 1.0
 Description: 
 """
+import logging
+
 import igl
 import numpy as np
 import torch
@@ -95,17 +97,14 @@ def _loss_function_standard(inputs, targets, model, loss_info):
 
 
 def _loss_function_chamfer(inputs, targets, model, loss_info):
-    def __prepare_data(device, inputs, model, raw_data_folder, time_list):
+    def __prepare_data(device, inputs, model, meshes_list, time_list):
         # select one random time from inputs
         time = __get_random_time(inputs)
         # Forward pass: Encoder and Decoder
         encoded = model.encoder(inputs)
-        decoder_data = get_time_specific_decoder_data(device=device, encoded_features=encoded, time_value=time)
-        decoded_mesh_v = model.decoder(decoder_data)  # Decodes to 3D
+        decoder_input_data = get_time_specific_decoder_input_data(device=device, encoded_features=encoded, time_value=time)
+        decoded_mesh_v = model.decoder(decoder_input_data)  # Decodes to 3D
         time_index = time_frame_list_find_closest_element_index(time_list, time)
-        if not time_index:
-            raise Exception("Time index has to be defined")
-        meshes_list = get_loaded_meshes_list(raw_data_folder)
         selected_mesh = meshes_list[time_index]
         original_mesh_v = selected_mesh.vertices
         original_mesh_f = selected_mesh.faces
@@ -114,37 +113,45 @@ def _loss_function_chamfer(inputs, targets, model, loss_info):
         original_mesh_f = torch.tensor(original_mesh_f, device=device)
         return decoded_mesh_v, original_mesh_f, original_mesh_v
 
-    raw_data_folder = loss_info['raw_data_folder']
+    meshes_list = loss_info['meshes_list']
     time_list = loss_info['time_list']
     device = loss_info['device']
 
-    decoded_mesh_v, original_mesh_f, original_mesh_v = __prepare_data(device, inputs, model, raw_data_folder, time_list)
+    decoded_mesh_v, original_mesh_f, original_mesh_v = __prepare_data(device, inputs, model, meshes_list, time_list)
     # Compute one-way Chamfer Distance loss
     # original_mesh_v = torch.tensor(original_mesh_v, device=device, requires_grad=False)
     # original_mesh_f = torch.tensor(original_mesh_f, device=device, requires_grad=False)
 
     loss_chamfer = __compute_loss_one_way_chamfer_distance(original_mesh_v, original_mesh_f, decoded_mesh_v)
-    print(f"Chamfer loss: {loss_chamfer}")
+    # if f"{loss_chamfer}" != '0.0':
+    #     logging.info(f"Chamfer loss: {loss_chamfer}")
     loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
-    # todo change
-    return loss_chamfer
+    return loss_chamfer + loss_standard
 
 
 
 
 
 def mse_area(area_coefficient):
-    def mse_area(x_true, x_pred, encoder):
-        diff_pos = torch.sum(torch.square(x_true - x_pred), dim=1).mean()
+    def mse_area(targets, inputs, encoder):
+        inputs_without_time = inputs[:, :-1]
+        diff_pos = torch.sum(torch.square(targets - inputs_without_time), dim=1).mean()
 
-        x_var = torch.autograd.Variable(x_pred, requires_grad=True)
-        uv_pred = encoder(x_var)
+        # requires_grad = True
+        encoder_input = inputs.requires_grad_(True)
+        encoder_output = encoder(encoder_input)
+
+        uv_pred = encoder_output
         u_pred = uv_pred[::, 0]
         v_pred = uv_pred[::, 1]
-        g_u = torch.autograd.grad(outputs=u_pred, inputs=x_var, grad_outputs=torch.ones_like(u_pred),
-                                  retain_graph=True, allow_unused=True, create_graph=True)[0]
-        g_v = torch.autograd.grad(outputs=v_pred, inputs=x_var, grad_outputs=torch.ones_like(v_pred),
-                                  retain_graph=True, allow_unused=True, create_graph=True)[0]
+        #x_var = encoder_input[:, :-1]
+
+        g_u_all = torch.autograd.grad(outputs=u_pred, inputs=encoder_input, grad_outputs=torch.ones_like(u_pred),
+                                  retain_graph=True, allow_unused=True, create_graph=True)
+        g_u = g_u_all[0]
+        g_v_all = torch.autograd.grad(outputs=v_pred, inputs=encoder_input, grad_outputs=torch.ones_like(v_pred),
+                                  retain_graph=True, allow_unused=True, create_graph=True)
+        g_v = g_v_all[0]
 
         e = torch.sum(g_u * g_u, dim=1)
         f = torch.sum(g_u * g_v, dim=1)
@@ -155,7 +162,6 @@ def mse_area(area_coefficient):
         return diff_pos + area_coefficient * diff_area
 
     return mse_area
-
 
 def _loss_function_uv_streach(inputs, targets, model, loss_info):
     loss_uv_streach = __compute_loss_uv_streach(inputs, model, targets)
@@ -177,7 +183,7 @@ def get_training_config(nn_lr) -> (nn.Module, optim.Optimizer, nn.Module):
     return model, optimizer, loss_function
 
 
-def get_time_specific_decoder_data(device, encoded_features, time_value):
+def get_time_specific_decoder_input_data(device, encoded_features, time_value):
     # Create a tensor of the same shape as the time feature in the input
     time_tensor = torch.full((encoded_features.size(0), 1), time_value, dtype=torch.float32).to(device)
     # Concatenate the encoded features with the time tensor

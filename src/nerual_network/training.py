@@ -12,7 +12,7 @@ from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame
 from src.nerual_network.class_model import NNDataset, Simple_MLP_02
 from src.utils.helpers import load_pickle_file
 from utils.constants import NN_DEVICE_STR, TrainConfig
-from utils.nn_config_utils import get_training_config, get_time_specific_decoder_data, get_loaded_meshes_list
+from utils.nn_config_utils import get_training_config, get_time_specific_decoder_input_data, get_loaded_meshes_list
 
 
 # Restrict access to underscore-prefixed functions
@@ -50,7 +50,7 @@ def _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss
 
 
 # Main training function with early stopping and scheduler
-def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, model_save_path, batch_size, raw_data_folder, nn_lr):
+def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, model_save_path, batch_size, meshes_list, nn_lr):
     device = torch.device(NN_DEVICE_STR)
     logging.info(f"Using device: {device}")
 
@@ -67,7 +67,8 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
 
     for epoch in range(1, num_epochs + 1):
         # Train and evaluate for one epoch
-        loss_function_info = {'raw_data_folder': raw_data_folder, 'time_list': time_frame_list, 'device': device}
+
+        loss_function_info = {'meshes_list': meshes_list, 'time_list': time_frame_list, 'device': device}
         train_loss = _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info)
         val_loss = _evaluate(model, val_loader, loss_function, device, loss_function_info)
 
@@ -104,6 +105,7 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_ep
     logging.info("Starting Training Neural network")
     # Identify unique clusters in the data
     unique_clusters = surface_data_list.get_unique_clusters()
+    meshes_list = get_loaded_meshes_list(raw_data_folder)
 
     for cluster in unique_clusters:
         # Filter data for the current cluster
@@ -115,7 +117,7 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_ep
         logging.info(f"--------------------Training neural network for cluster {cluster}...")
 
         # Train the neural network on the current cluster's data
-        _train_neural_network(surface_data_cluster, max_epochs, patience, model_weights_filepath, batch_size, raw_data_folder, nn_lr)
+        _train_neural_network(surface_data_cluster, max_epochs, patience, model_weights_filepath, batch_size, meshes_list, nn_lr)
 
         logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
 
@@ -144,12 +146,12 @@ def _create_data_loaders(surface_data_list : SurfacePointsFrameList, batch_size)
 def _evaluate(model, val_loader, loss_function, device, loss_function_info):
     model.eval()  # Set model to evaluation mode
     val_loss = 0
-    with torch.no_grad():
-        for inputs, targets in val_loader:
-            inputs, targets = inputs.float().to(device), targets.float().to(device)
+    #with torch.no_grad():
+    for inputs, targets in val_loader:
+        inputs, targets = inputs.float().to(device), targets.float().to(device)
 
-            loss = loss_function(inputs, targets, model, loss_function_info)
-            val_loss += loss.item()
+        loss = loss_function(inputs, targets, model, loss_function_info)
+        val_loss += loss.item()
     return val_loss / len(val_loader)  # Return average validation loss
 
 
@@ -172,6 +174,12 @@ def train_nn(train_config: TrainConfig):
     logging.info(f"Patience for early stopping: {train_config.nn_config.patience}")
     logging.info(f"Batch size: {train_config.nn_config.batch_size}")
     logging.info(f"Raw data folder: {train_config.file_path_config.raw_data_folderpath}")
+
+    model, optimizer, loss_function = get_training_config(train_config.nn_config.nn_lr)
+    # print model, optimizer, loss_function class or function names
+    logging.info(f"Model: {model}")
+    logging.info(f"Optimizer: {optimizer}")
+    logging.info(f"Loss function: {loss_function}")
 
     surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
     if surface_data_list is None or surface_data_list.list is None or not isinstance(surface_data_list,

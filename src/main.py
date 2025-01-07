@@ -30,8 +30,8 @@ def main():
                                    num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS,
                                    time_steps=MAX_TIME_STEPS)
 
-        train_config.nn_config.max_epochs = 2
-        train_config.num_surface_points = 100
+        # train_config.nn_config.max_epochs = 2
+        # train_config.num_surface_points = 1000
 
         logger = init_logger(train_config.file_path_config.log_filepath)
 

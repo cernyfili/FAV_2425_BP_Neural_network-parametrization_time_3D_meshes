@@ -172,6 +172,9 @@ class Simple_MLP_03(nn.Module):
             # change all the time_value so all elements have the value of time_value
             time = torch.full_like(time, time_value)
 
+        # Ensure the input tensor has requires_grad=True
+        x.requires_grad_(True)
+
         # Encode the input features
         encoded_features = self.encoder(x)
 

@@ -19,7 +19,7 @@ nn_lr = 1e-4
 #nn_model = Simple_MLP_02()
 #nn_optimizer = optim.Adam(nn_model.parameters(), lr=nn_lr)
 
-NN_DEVICE_STR = 'cpu'
+NN_DEVICE_STR = 'cuda'
 # endregion
 
 # region Data processing constants
@@ -110,7 +110,7 @@ DEFAULT_NN_CONFIG = NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patienc
 class FilePathConfig:
     def __init__(self, data_foldername, processed_session_folderpath=None, raw_folderpath=None,
                  processed_folderpath=None):
-        current_time_str = datetime.now().strftime("%Y%m%d")
+        current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         # Create a folder name based on the current date and time
         timestamped_foldername = f"{data_foldername}_{current_time_str}"
 
