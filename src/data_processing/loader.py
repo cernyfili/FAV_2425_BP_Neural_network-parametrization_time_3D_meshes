@@ -127,7 +127,7 @@ def _load_bin_files(filepaths):
             raise ValueError("Inconsistent index in file name.")
         # Append the points for this file to the data list
 
-    return data
+    return np.array(data) # Shape: (num_files, num_time_steps, num_points)
 
 
 def load_centers_data(folder_path, time_steps):

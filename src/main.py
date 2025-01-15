@@ -22,7 +22,7 @@ def main():
     # data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
 
     #data_folders = ["ball", "casual_man_1000"]
-    data_folders = ["ball"]
+    data_folders = ["casual_man_1000"]
 
     for data_foldername in data_folders:
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
@@ -31,7 +31,7 @@ def main():
                                    time_steps=MAX_TIME_STEPS)
 
         # train_config.nn_config.max_epochs = 2
-        # train_config.num_surface_points = 1000
+        #train_config.num_surface_points = 1000
 
         logger = init_logger(train_config.file_path_config.log_filepath)
 

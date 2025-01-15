@@ -16,7 +16,7 @@ import trimesh
 from torch import optim, nn
 
 from data_processing.class_mapping import time_frame_list_find_closest_element_index
-from nerual_network.class_model import Simple_MLP_02
+from nerual_network.class_model import Simple_MLP_02, Simple_MLP_03
 from utils.helpers import get_meshes_list
 
 
@@ -157,12 +157,11 @@ def mse_area(area_coefficient):
         f = torch.sum(g_u * g_v, dim=1)
         g = torch.sum(g_v * g_v, dim=1)
         det_i = e * g - f * f
-        diff_area = -det_i.mean()  # Use negative mean to maximize det_i
+        diff_area = torch.abs(det_i).mean()  # Use negative mean to maximize det_i
 
         return diff_pos + area_coefficient * diff_area
 
     return mse_area
-
 def _loss_function_uv_streach(inputs, targets, model, loss_info):
     loss_uv_streach = __compute_loss_uv_streach(inputs, model, targets)
     loss_standard = _loss_function_standard(inputs, targets, model, loss_info)

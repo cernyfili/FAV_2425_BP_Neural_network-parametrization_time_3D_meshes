@@ -89,6 +89,7 @@ def get_meshes_list(meshes_folder_path):
     obj_files_list = []
     files = os.listdir(meshes_folder_path)
 
+    min_index = get_file_index_from_filename(files[0])
     # Select only .obj files
     for filename in files:
         if filename.endswith('.obj'):
@@ -96,7 +97,7 @@ def get_meshes_list(meshes_folder_path):
             obj_files_list.append(obj_file_path)
 
             file_index = get_file_index_from_filename(obj_file_path)
-            if file_index != len(obj_files_list) - 1:
+            if file_index != len(obj_files_list) - 1 + min_index:
                 raise Exception(f"File index mismatch: {file_index} vs {len(obj_files_list) - 1}")
 
     return obj_files_list
@@ -203,4 +204,4 @@ def end_logger(logger):
 
 def get_file_index_from_filename(mesh_file_path, min_file_index=0):
     file_index = int(mesh_file_path.split('.')[-2][-3:])
-    return file_index + min_file_index
+    return file_index - min_file_index

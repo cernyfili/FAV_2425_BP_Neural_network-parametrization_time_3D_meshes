@@ -355,7 +355,7 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
     unique_clusters = surface_data_list.get_unique_clusters()
 
     # select original points where time is 0
-    original_points_frame = surface_data_list.get_element_by_time_value(time)
+    original_points_frame = surface_data_list.get_element_by_time_index(time)
 
     for cluster in unique_clusters:
         # Load the original surface points for the current cluster
@@ -421,7 +421,7 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
     return original_points_all, processed_points_all, cluster_labels
 
 
-def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images_save_folderpath, batch_size, nn_lr):
+def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images_save_folderpath, batch_size, nn_lr, time):
     def visualize_for_eachtime(original_points_all, processed_points_all, nn_lr):
 
         # Funkce pro normalizaci pro jednotlivé osy
@@ -486,7 +486,7 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
 
     original_points_all, processed_points_all, cluster_labels = run_model_decoder_all_times_with_selected_encoder_time(
         surface_data_list, model_weights_template,
-        batch_size, 0, nn_lr)
+        batch_size, time, nn_lr)
     visualize_for_eachtime(original_points_all, processed_points_all, nn_lr)
 
 
@@ -844,7 +844,10 @@ def evaluate(train_config: TrainConfig):
 
     # region Visulize
 
-    _visualize_uv_points_in_3d(surface_data_list, model_weights_template, os.path.join(images_save_folderpath, "time_uv_points"), batch_size, nn_lr)
+    _visualize_uv_points_in_3d(surface_data_list, model_weights_template, os.path.join(images_save_folderpath, "time_uv_points_0"), batch_size, nn_lr, 0)
+
+    _visualize_uv_points_in_3d(surface_data_list, model_weights_template,
+                               os.path.join(images_save_folderpath, "time_uv_points_59"), batch_size, nn_lr, 59)
 
     original_points_all, processed_points_all, cluster_labels = _prepare_export_data(surface_data_list,
                                                                                      model_weights_template,
