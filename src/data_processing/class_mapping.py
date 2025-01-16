@@ -106,8 +106,8 @@ class SurfacePointsFrameList:
             return normalized_mesh
 
 
-        def __shift_and_scale_points(surface_data_list, shift_vector, max_norm):
-            for surface_data in surface_data_list.list:
+        def __shift_and_scale_points(shift_vector, max_norm):
+            for surface_data in self.list:
                 # normalize surface points
                 normalized_points = (surface_data.points_list - shift_vector) / max_norm
                 surface_data.points_list = normalized_points
@@ -124,7 +124,7 @@ class SurfacePointsFrameList:
         shift_vector, max_norm = __compute_shift_and_scale(self)
 
         # Shift points to origin and scale
-        __shift_and_scale_points(self, shift_vector, max_norm)
+        __shift_and_scale_points(shift_vector, max_norm)
 
         self._normalized_settings = NormalizedSetttings(True, shift_vector, max_norm)
 
