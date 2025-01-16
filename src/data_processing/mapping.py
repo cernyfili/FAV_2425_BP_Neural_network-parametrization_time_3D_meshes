@@ -9,6 +9,7 @@ from scipy.spatial import KDTree
 
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
+from data_processing.data_structures import MeshNDArray
 from src.utils.helpers import load_pickle_file, get_meshes_list
 from utils.helpers import get_file_index_from_filename
 
@@ -19,11 +20,6 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
-
-# region DATA STRUCTURES
-
-
-# endregion
 
 # region PRIVATE FUNCTIONS
 
@@ -160,8 +156,9 @@ def _create_surface_points_from_mesh_list(meshes_filepaths_list : list, clustere
         surface_points, surface_labels = _create_categorized_surface_points(mesh, centers_points_frame,
                                                                             center_labels_frame,
                                                                             num_surface_points)
+
         # append both values to list with names in the list
-        surface_data_list.append(SurfacePointsFrame(surface_points, surface_labels, None))
+        surface_data_list.append(SurfacePointsFrame(surface_points, surface_labels, None, mesh))
 
     return surface_data_list
 

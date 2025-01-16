@@ -22,8 +22,12 @@ class NNDataset(Dataset):
         for surface_data in surface_data_list.list:
             points = surface_data.points_list
             points = np.array(points)
+
             time = np.full((points.shape[0], 1), surface_data.time.value)
-            points_with_time = np.hstack((points, time))
+
+            time_index = np.full((points.shape[0], 1), surface_data.time.index)
+
+            points_with_time = np.hstack((points, time, time_index))
             self.data.append(points_with_time)
 
         self.data = np.vstack(self.data)  # Shape: [total_points, feature_count]
@@ -34,7 +38,7 @@ class NNDataset(Dataset):
     def __getitem__(self, idx):
         # Separate data based on the target and input requirements
         targets = self.data[idx, :3]   # First 3 columns as targets
-        inputs = self.data[idx, :4]    # All 4 columns as inputs, including "time" as the last one
+        inputs = self.data[idx, :5]    # All 4 columns as inputs, including "time" as the last one
         return inputs, targets
 
 

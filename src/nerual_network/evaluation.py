@@ -18,7 +18,8 @@ from nerual_network.class_evaluation import PairPointCenterPoint, PairPointCente
 from src.nerual_network.class_model import NNDataset
 from utils.constants import NN_DEVICE_STR, TrainConfig
 from utils.helpers import load_pickle_file
-from utils.nn_config_utils import get_training_config, get_time_specific_decoder_input_data, get_loaded_meshes_list
+from utils.nn_config_utils import get_training_config, prepare_decoder_input_data, get_loaded_meshes_list, \
+    prepare_encoder_input_data
 
 
 # Restrict access to underscore-prefixed functions
@@ -247,6 +248,7 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size, 
             for batch in original_points_loader:
                 inputs = batch[0]  # Get only the points with time
                 inputs = inputs.float().to(device)
+                inputs = prepare_encoder_input_data(inputs)
 
                 outputs = model(inputs)  # Forward pass through the model
                 processed_points.append(outputs)
@@ -381,7 +383,8 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
         with torch.no_grad():  # No need to calculate gradients during evaluation
             for inputs in original_points_loader:
                 inputs = inputs[0].float().to(device)
-                encoded_features_element = model.encoder(inputs)
+                encoder_input_data = prepare_encoder_input_data(inputs)
+                encoded_features_element = model.encoder(encoder_input_data)
                 encoded_features.append(encoded_features_element)
 
 
@@ -393,7 +396,7 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
                 raise Exception("Not same time")
 
             time_value = surface_points_frame.time.value
-            encoded_with_time = get_time_specific_decoder_input_data(device, encoded_features, time_value)
+            encoded_with_time = prepare_decoder_input_data(device, encoded_features, time_value)
 
             # Pass through the decoder
             decoded_output = model.decoder(encoded_with_time)

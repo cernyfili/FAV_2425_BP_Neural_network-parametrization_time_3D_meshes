@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 
+TEST_MODE = True
 
 # Restrict access to only uppercase constants
 def __getattr__(name):
@@ -19,7 +20,10 @@ nn_lr = 1e-4
 #nn_model = Simple_MLP_02()
 #nn_optimizer = optim.Adam(nn_model.parameters(), lr=nn_lr)
 
-NN_DEVICE_STR = 'cuda'
+if TEST_MODE:
+    NN_DEVICE_STR = 'cpu'
+else:
+    NN_DEVICE_STR = 'cuda'
 # endregion
 
 # region Data processing constants

@@ -6,7 +6,7 @@ from nerual_network.training import train_nn
 from src.data_processing.clustering import process_clustered_data
 from src.data_processing.mapping import process_surface_data
 from utils.constants import DEFAULT_NN_CONFIG, NUM_CLUSTERS, \
-    NUM_SURFACE_POINTS, MAX_TIME_STEPS, FilePathConfig, TrainConfig
+    NUM_SURFACE_POINTS, MAX_TIME_STEPS, FilePathConfig, TrainConfig, TEST_MODE
 from utils.helpers import init_logger, end_logger
 
 
@@ -19,19 +19,23 @@ def preprocess_data(train_config):
 
 
 def main():
+
     # data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
 
     #data_folders = ["ball", "casual_man_1000"]
     data_folders = ["casual_man_1000"]
+
+    if TEST_MODE:
+        data_folders = ["ball_test"]
 
     for data_foldername in data_folders:
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername=data_foldername),
                                    num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS,
                                    time_steps=MAX_TIME_STEPS)
-
-        # train_config.nn_config.max_epochs = 2
-        #train_config.num_surface_points = 1000
+        if TEST_MODE:
+            train_config.nn_config.max_epochs = 2
+            train_config.num_surface_points = 1000
 
         logger = init_logger(train_config.file_path_config.log_filepath)
 

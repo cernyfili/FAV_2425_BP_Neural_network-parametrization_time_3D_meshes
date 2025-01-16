@@ -12,7 +12,7 @@ from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame
 from src.nerual_network.class_model import NNDataset, Simple_MLP_02
 from src.utils.helpers import load_pickle_file
 from utils.constants import NN_DEVICE_STR, TrainConfig
-from utils.nn_config_utils import get_training_config, get_time_specific_decoder_input_data, get_loaded_meshes_list
+from utils.nn_config_utils import get_training_config, prepare_decoder_input_data, get_loaded_meshes_list
 
 
 # Restrict access to underscore-prefixed functions
@@ -29,6 +29,7 @@ def _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss
     model.train()  # Set model to training mode
     train_loss = 0
     for inputs, targets in train_loader:
+
         inputs, targets = inputs.float().to(device), targets.float().to(device)
 
         # Forward pass
@@ -54,7 +55,10 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
     device = torch.device(NN_DEVICE_STR)
     logging.info(f"Using device: {device}")
 
-    train_loader, val_loader, time_frame_list = _create_data_loaders(data, batch_size)
+    if not data.is_normalized:
+        logging.warning("Data is not normalized. Neural network training may not be effective.")
+
+    train_loader, val_loader = _create_data_loaders(data, batch_size)
 
     model, optimizer, loss_function = get_training_config(nn_lr)
 
@@ -68,7 +72,7 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
     for epoch in range(1, num_epochs + 1):
         # Train and evaluate for one epoch
 
-        loss_function_info = {'meshes_list': meshes_list, 'time_list': time_frame_list, 'device': device}
+        loss_function_info = {'meshes_list': meshes_list, 'device': device}
         train_loss = _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info)
         val_loss = _evaluate(model, val_loader, loss_function, device, loss_function_info)
 
@@ -98,14 +102,14 @@ def _train_neural_network(data : SurfacePointsFrameList, num_epochs, patience, m
 
 # Function to train the neural network for each cluster
 def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_epochs, patience, batch_size,
-                               model_weights_template, raw_data_folder, nn_lr):
+                               model_weights_template, nn_lr):
     if max_epochs == 0:
         return
 
     logging.info("Starting Training Neural network")
     # Identify unique clusters in the data
     unique_clusters = surface_data_list.get_unique_clusters()
-    meshes_list = get_loaded_meshes_list(raw_data_folder)
+    meshes_list = surface_data_list.get_meshes_list()
 
     for cluster in unique_clusters:
         # Filter data for the current cluster
@@ -123,10 +127,9 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, max_ep
 
 
 # Function to split data and create data loaders
-def _create_data_loaders(surface_data_list : SurfacePointsFrameList, batch_size):
+def _create_data_loaders(surface_data_list : SurfacePointsFrameList, batch_size : int):
     # Create an instance of SurfaceDataset using the provided surface_data_list
     dataset = NNDataset(surface_data_list)
-    time_frame_list = surface_data_list.get_time_list()
 
     # Split indices for training and validation
     train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
@@ -139,7 +142,7 @@ def _create_data_loaders(surface_data_list : SurfacePointsFrameList, batch_size)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    return train_loader, val_loader, time_frame_list
+    return train_loader, val_loader
 
 
 # Function to evaluate the model on the validation set
@@ -191,6 +194,5 @@ def train_nn(train_config: TrainConfig):
                                patience=train_config.nn_config.patience,
                                batch_size=train_config.nn_config.batch_size,
                                model_weights_template=train_config.file_path_config.model_weights_folderpath,
-                               raw_data_folder=train_config.file_path_config.raw_data_folderpath,
                                nn_lr=train_config.nn_config.nn_lr)
     logging.info("------------------TRAINING ENDED------------------")

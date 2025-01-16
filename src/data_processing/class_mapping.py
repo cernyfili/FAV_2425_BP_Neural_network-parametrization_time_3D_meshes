@@ -1,10 +1,54 @@
+from dataclasses import dataclass
 from typing import List
 
 import numpy as np
+import trimesh
+from matplotlib.collections import TriMesh
+from trimesh import Trimesh
+
+from data_processing.data_structures import MeshNDArray
+
+@dataclass
+class NormalizedSetttings:
+    is_normalized: bool
+    shift_vector: np.ndarray | None
+    max_norm: float | None
+
+class MeshList(list):
+
+    # override append
+    def append(self, __object):
+        if not isinstance(__object, tuple):
+            raise ValueError("Object must be a tuple.")
+        if len(__object) != 2:
+            raise ValueError("Tuple must have 2 elements.")
+        if not isinstance(__object[0], int):
+            raise ValueError("First element of tuple must be an integer.")
+        if not isinstance(__object[1], Trimesh):
+            raise ValueError("Second element of tuple must be a Trimesh object.")
+        super().append(__object)
+
+
+    # get mesh by time index
+    def get_mesh_by_time_index(self, time_index: int) -> Trimesh:
+        element = self[time_index]
+
+        if element[0] == time_index:
+            return element[1]
+
+        for i, element in enumerate(self):
+            if element[0] == time_index:
+                return element[1]
+
+        raise ValueError("Time index not found.")
+
+
+
 
 
 class SurfacePointsFrameList:
     def __init__(self, surface_data_list: list):
+        self._normalized_settings = NormalizedSetttings(False, None, None)
         if not isinstance(surface_data_list, list) or not all(
                 isinstance(item, SurfacePointsFrame) for item in surface_data_list):
             raise TypeError("All items in surface_data_list must be instances of SurfaceData")
@@ -40,12 +84,12 @@ class SurfacePointsFrameList:
         """
         import numpy as np
 
-        def normalize_time(surface_data_list):
+        def __normalize_time(surface_data_list):
             total_length = len(surface_data_list.list) - 1
             for surface_data in surface_data_list.list:
                 surface_data.time.value /= total_length
 
-        def compute_shift_and_scale(surface_data_list : SurfacePointsFrameList):
+        def __compute_shift_and_scale(surface_data_list : SurfacePointsFrameList):
             # Combine all points for faster computation
             all_points_list = surface_data_list.get_all_points()
             all_points = np.vstack([all_points_list])
@@ -55,21 +99,40 @@ class SurfacePointsFrameList:
             max_norm = np.linalg.norm(all_points - shift_vector, axis=1).max()
             return shift_vector, max_norm
 
-        def shift_and_scale_points(surface_data_list, shift_vector, max_norm):
+        def __create_normalized_mesh(shift_vector, max_norm, mesh : Trimesh) -> Trimesh:
+            # normalize mesh
+            normalized_vertices = (mesh.vertices - shift_vector) / max_norm
+            normalized_mesh = trimesh.Trimesh(vertices=normalized_vertices, faces=mesh.faces)
+            return normalized_mesh
+
+
+        def __shift_and_scale_points(surface_data_list, shift_vector, max_norm):
             for surface_data in surface_data_list.list:
-                value = (surface_data.points_list - shift_vector) / max_norm
-                surface_data.points_list = value
+                # normalize surface points
+                normalized_points = (surface_data.points_list - shift_vector) / max_norm
+                surface_data.points_list = normalized_points
+
+                # normalize mesh
+                mesh = surface_data.mesh
+                normalized_mesh = __create_normalized_mesh(shift_vector, max_norm, mesh)
+                surface_data.mesh = normalized_mesh
 
         # Normalize time for each object
-        normalize_time(self)
+        __normalize_time(self)
 
         # Compute the shift vector and max norm
-        shift_vector, max_norm = compute_shift_and_scale(self)
+        shift_vector, max_norm = __compute_shift_and_scale(self)
 
         # Shift points to origin and scale
-        shift_and_scale_points(self, shift_vector, max_norm)
+        __shift_and_scale_points(self, shift_vector, max_norm)
+
+        self._normalized_settings = NormalizedSetttings(True, shift_vector, max_norm)
 
         return self
+
+    @property
+    def is_normalized(self):
+        return self._normalized_settings.is_normalized
 
     def get_unique_times(self):
         """
@@ -244,6 +307,20 @@ class SurfacePointsFrameList:
         """
         return [surface_data.time for surface_data in self.list]
 
+    def get_meshes_list(self) -> MeshList:
+        """
+        Return the list of meshes.
+        if some none mesh is found, raise ValueError
+        and check if index of output list of mesh is same as time index
+        """
+        meshes_list = MeshList()
+        for i, surface_data in enumerate(self.list):
+            if surface_data.mesh is None:
+                raise ValueError("Mesh is not loaded.")
+            meshes_list.append((surface_data.time.index, surface_data.mesh))
+
+        return meshes_list
+
 
 class TimeFrame:
     """
@@ -344,7 +421,7 @@ class SurfacePointsFrame:
     Class to represents points in object for one cluster and for a single time step.
     """
 
-    def __init__(self, surface_points, surface_labels=None, time: TimeFrame = None):
+    def __init__(self, surface_points, surface_labels=None, time: TimeFrame = None, mesh : Trimesh = None):
 
 
         if surface_labels is not None and len(surface_labels) != len(surface_points):
@@ -359,6 +436,7 @@ class SurfacePointsFrame:
                 self.labeled_points_list.append(LabeledPoint(surface_points[i], surface_labels[i]))
 
         self.time = time
+        self._mesh : Trimesh = mesh
 
     def slice_arrays(self, id):
         if id >= len(self.labeled_points_list.list):
@@ -401,12 +479,26 @@ class SurfacePointsFrame:
                 self.labeled_points_list.append(LabeledPoint(points_list[i]))
             else:
                 self.labeled_points_list.append(LabeledPoint(points_list[i], surface_labels[i]))
-        return self.points_list
+        #return self.points_list
+
+
 
 
     @property
     def labels_list(self):
         return self.labeled_points_list.get_labels()
+
+    @property
+    def mesh(self):
+        if self._mesh is None:
+            raise ValueError("Mesh is not loaded.")
+        return self._mesh
+
+    @mesh.setter
+    def mesh(self, mesh : Trimesh):
+        if not mesh:
+            raise ValueError("Mesh is empty.")
+        self._mesh = mesh
 
     # function which represents object in debug value view
     def __repr__(self):
