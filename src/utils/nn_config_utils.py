@@ -183,33 +183,53 @@ def _loss_function_chamfer(inputs, targets, model, loss_info):
 
     return combined_loss
 
+# function which will return torch with time values from argument inputs
+def __select_unique_time_values(time_value_tensor: torch.Tensor) -> torch.Tensor:
 
-def _compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor, meshes_list: MeshList, decoder) -> int:
+    # get unique time values
+    unique_time_values = torch.unique(time_value_tensor)
+
+    return unique_time_values
+
+# function which will return time_values list where is the two most common time values
+def __select_most_common_time_values(time_value_tensor: torch.Tensor, num_values = 2) -> torch.Tensor:
+    # Count occurrences of each value in the tensor
+    counts = torch.bincount(time_value_tensor)
+
+    # Get the indices of the two most common values
+    top_two_indices = torch.topk(counts, num_values).indices
+
+    # Return the two most common values
+    return top_two_indices
+
+def _compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor, meshes_list: MeshList, decoder,
+                                                    select_times_function : callable) -> int:
+    """
+
+    :param decoder_data: tensor 4 columns [x_value, y_value, time_value, time_index]
+    :param meshes_list:
+    :param decoder:
+    :param select_times_function:
+    :return:
+    """
     # for each unique time in decoder_input_data run this throug decoder and then find with coresponding index from time_index_tensor where
     # decoder_input_data 3th column is equal to time_index_tensor and then coresponding mesh from meshes_list with that index and compute chamfer distance
 
     loss_combined = 0
 
+    time_index_tensor = decoder_data[:, 3]
     # get unique time values from decoder_input_data from 3th column
-    unique_time_values = torch.unique(decoder_data[:, 2])
+    time_index_selection = select_times_function(time_index_tensor)
 
     # for each unique time value
-    for time_value in unique_time_values:
-        # get all rows where 3th column is equal to time_value
-        decoder_data_time_value = decoder_data[decoder_data[:, 2] == time_value]
+    for time_index in time_index_selection:
+        # get all rows where 4th column is equal to time_value
+        decoder_data_select_time_index = decoder_data[decoder_data[:, 3] == time_index]
 
-        # get time_index_tensor
-        time_index_tensor = decoder_data_time_value[:, 3]
-
-        # check if all time_index_tensor values are same
-        if not torch.all(time_index_tensor == time_index_tensor[0]):
-            raise ValueError("All time_index_tensor values should be same")
-        time_index = int(time_index_tensor[0])
-
-        meshe = meshes_list.get_mesh_by_time_index(time_index)
+        meshe = meshes_list.get_mesh_by_time_index(int(time_index))
 
         # run decoder on decoder_data_time_value
-        decoder_input_data_time_value = decoder_data_time_value[:, :3]  # remove last column (time_index)
+        decoder_input_data_time_value = decoder_data_select_time_index[:, :3]  # remove last column (time_index)
         decoded_mesh_v = decoder(decoder_input_data_time_value)
 
         # Compute one-way Chamfer Distance loss
@@ -259,12 +279,14 @@ def _loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info)
 
         return decoder_input_data
 
+    select_function = __select_unique_time_values
+
     meshes_list = loss_info['meshes_list']
     device = loss_info['device']
 
     decoder_data = __prepare_data(device, inputs, model)
     loss_chamfer = _compute_loss_chamfer_distance_with_time_tensor(decoder_data=decoder_data, meshes_list=meshes_list,
-                                                                   decoder=model.decoder)
+                                                                   decoder=model.decoder, select_times_function=select_function)
 
     loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
 
