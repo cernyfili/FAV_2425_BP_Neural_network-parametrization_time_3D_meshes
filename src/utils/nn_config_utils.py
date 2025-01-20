@@ -199,8 +199,12 @@ def __select_most_common_time_values(time_value_tensor: torch.Tensor, num_values
     # Count occurrences of each value in the tensor
     counts = torch.bincount(time_value_tensor)
 
+    ratio = 0.5
+    # get number of half of all count of unique values
+    num_select = int(counts.size(0) * ratio)
+
     # Get the indices of the two most common values
-    top_two_indices = torch.topk(counts, num_values).indices
+    top_two_indices = torch.topk(counts, num_select).indices
 
     # Return the two most common values
     return top_two_indices
