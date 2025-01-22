@@ -13,7 +13,7 @@ import igl
 import numpy as np
 import torch
 import trimesh
-from torch import optim, nn
+from torch import optim, nn, tensor
 
 from data_processing.class_mapping import MeshList
 from nerual_network.class_model import Simple_MLP_02
@@ -214,7 +214,7 @@ def __select_most_common_time_values(time_value_tensor: torch.Tensor, num_values
     return top_two_indices
 
 def _compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor, meshes_list: MeshList, decoder,
-                                                    select_times_function : callable) -> int:
+                                                    select_times_function : callable) -> list[tensor]:
     """
 
     :param decoder_data: tensor 4 columns [x_value, y_value, time_value, time_index]
@@ -226,7 +226,7 @@ def _compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor, 
     # for each unique time in decoder_input_data run this throug decoder and then find with coresponding index from time_index_tensor where
     # decoder_input_data 3th column is equal to time_index_tensor and then coresponding mesh from meshes_list with that index and compute chamfer distance
 
-    loss_combined = 0
+    loss_list = []
 
     time_index_tensor = decoder_data[:, 3]
     # get unique time values from decoder_input_data from 3th column
@@ -248,9 +248,9 @@ def _compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor, 
                                                                original_mesh_f=meshe.faces,
                                                                decoded_mesh_v=decoded_mesh_v)
 
-        loss_combined += loss_chamfer
+        loss_list.append(loss_chamfer)
 
-    return loss_combined
+    return loss_list
 
 
 def _loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info):
@@ -290,14 +290,17 @@ def _loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info)
 
         return decoder_input_data
 
-    select_function = __select_most_common_time_values
+    select_function = __select_unique_time_values
 
     meshes_list = loss_info['meshes_list']
     device = loss_info['device']
 
     decoder_data = __prepare_data(device, inputs, model)
-    loss_chamfer = _compute_loss_chamfer_distance_with_time_tensor(decoder_data=decoder_data, meshes_list=meshes_list,
+    loss_chamfer_list = _compute_loss_chamfer_distance_with_time_tensor(decoder_data=decoder_data, meshes_list=meshes_list,
                                                                    decoder=model.decoder, select_times_function=select_function)
+
+    #compute avrage of all chamfer distances
+    loss_chamfer = torch.stack(loss_chamfer_list).mean()
 
     loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
 
