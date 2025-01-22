@@ -10,15 +10,15 @@ from scipy.sparse.linalg import eigsh
 from torch.utils.data import DataLoader
 
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
+from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
 from data_processing.loader import load_centers_data
 from data_processing.mapping import categorize_points_with_labels
-from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
 from nerual_network.class_evaluation import PairPointCenterPoint, PairPointCenterPointList, DecoderElement, \
     DecoderPairList, EvaluationResult, EvaluationResultList
 from src.nerual_network.class_model import NNDataset
 from utils.constants import NN_DEVICE_STR, TrainConfig
 from utils.helpers import load_pickle_file
-from utils.nn_config_utils import get_training_config, prepare_decoder_input_data, get_loaded_meshes_list, \
+from utils.nn_config_utils import init_training_config, prepare_decoder_input_data, get_loaded_meshes_list, \
     prepare_encoder_input_data
 
 
@@ -220,7 +220,10 @@ def _visualize_original_and_processed_points(original_points_all, processed_poin
     print(f"Saved processed surface points image at {processed_image_path}")
 
 
-def _prepare_export_data(surface_data_list, model_weights_template, batch_size, nn_lr):
+def _prepare_export_data(surface_data_list, train_config: TrainConfig):
+    model_weights_template = train_config.file_path_config.model_weights_folderpath_template
+    batch_size = train_config.nn_config.batch_size
+
     original_points_all = []
     processed_points_all = []
     cluster_labels = []
@@ -234,7 +237,7 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size, 
 
         # Load the trained model for the current cluster
         model_weights_filepath = model_weights_template.format(cluster=cluster)
-        model = _load_trained_model(model_weights_filepath, nn_lr)
+        model = _load_trained_model(model_weights_filepath, train_config)
         device = torch.device(NN_DEVICE_STR)
 
         model.to(device)
@@ -271,7 +274,7 @@ def _prepare_export_data(surface_data_list, model_weights_template, batch_size, 
     return original_points_all, processed_points_all, cluster_labels
 
 
-def _load_trained_model(model_weights_filepath, nn_lr):
+def _load_trained_model(model_weights_filepath: str, train_config: TrainConfig):
     """
     Loads the trained neural network model weights from a specified file path.
 
@@ -284,8 +287,9 @@ def _load_trained_model(model_weights_filepath, nn_lr):
     Returns:
         model (nn.Module): The loaded neural network model.
     """
+
     # Load the checkpoint
-    model, optimizer, loss_function = get_training_config(nn_lr)
+    model, optimizer, loss_function = init_training_config(train_config)
 
     checkpoint = torch.load(model_weights_filepath)  # Load the checkpoint
     model.load_state_dict(checkpoint['model_state_dict'])  # Load the model state
@@ -350,7 +354,11 @@ def _visualize_clusters(points, labels, image_save_folder, image_name):
     plt.close(fig)
 
 
-def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : SurfacePointsFrameList, model_weights_template : str, batch_size : int, time : float, nn_lr):
+def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: SurfacePointsFrameList,
+                                                           time: float, train_config: TrainConfig):
+    model_weights_template = train_config.file_path_config.model_weights_folderpath_template
+    batch_size = train_config.nn_config.batch_size
+
     original_points_all = []
     processed_points_all = []
     cluster_labels = []
@@ -363,7 +371,6 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
         # Load the original surface points for the current cluster
         surface_data_cluster_timeframe = original_points_frame.filter_by_label(cluster)
 
-
         # Create a SurfaceDataset instance with the filtered surface data
         original_points_dataset = NNDataset(SurfacePointsFrameList([surface_data_cluster_timeframe]))
 
@@ -372,7 +379,7 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
 
         # Load the trained model for the current cluster
         model_weights_filepath = model_weights_template.format(cluster=cluster)
-        model = _load_trained_model(model_weights_filepath, nn_lr)
+        model = _load_trained_model(model_weights_filepath, train_config)
         device = torch.device(NN_DEVICE_STR)
 
         model.to(device)
@@ -386,7 +393,6 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
                 encoder_input_data = prepare_encoder_input_data(inputs)
                 encoded_features_element = model.encoder(encoder_input_data)
                 encoded_features.append(encoded_features_element)
-
 
         # Process the original points through the model
         encoded_features = torch.cat(encoded_features).to(device)
@@ -424,11 +430,12 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list : S
     return original_points_all, processed_points_all, cluster_labels
 
 
-def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images_save_folderpath, batch_size, nn_lr, time):
-    def visualize_for_eachtime(original_points_all, processed_points_all, nn_lr):
+def _visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images_save_folderpath: str,
+                               time: float, train_config: TrainConfig):
+    def visualize_for_eachtime(original_points_all, processed_points_all):
 
         # Funkce pro normalizaci pro jednotlivé osy
-        def normalize_slices(data, axis):
+        def normalize_slices(data):
 
             normalized = np.zeros_like(data)
 
@@ -442,13 +449,13 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
 
             return normalized
 
-        #create folder if not created
+        # create folder if not created
         os.makedirs(images_save_folderpath, exist_ok=True)
 
         # Normalizace podle osy X, Y, Z
-        normalized_x = normalize_slices(original_points_all[:, 0], axis=0)
-        normalized_y = normalize_slices(original_points_all[:, 1], axis=1)
-        normalized_z = normalize_slices(original_points_all[:, 2], axis=2)
+        normalized_x = normalize_slices(original_points_all[:, 0])
+        normalized_y = normalize_slices(original_points_all[:, 1])
+        normalized_z = normalize_slices(original_points_all[:, 2])
 
         # Spojení barev
         rgb_colors = np.stack([normalized_x, normalized_y, normalized_z], axis=1)
@@ -488,9 +495,8 @@ def _visualize_uv_points_in_3d(surface_data_list, model_weights_template, images
         print(f"Saved combined surface points image at {image_path}")
 
     original_points_all, processed_points_all, cluster_labels = run_model_decoder_all_times_with_selected_encoder_time(
-        surface_data_list, model_weights_template,
-        batch_size, time, nn_lr)
-    visualize_for_eachtime(original_points_all, processed_points_all, nn_lr)
+        surface_data_list=surface_data_list, time=time, train_config=train_config)
+    visualize_for_eachtime(original_points_all, processed_points_all)
 
 
 def _visualize_combined_surface_points_for_one_time(image_save_folder, original_points_slice, processed_points_slice,
@@ -565,7 +571,6 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
         for i in range(0, center_points.shape[0]):
             center_points_list_current.append(SurfacePointsFrame(center_points[i]))
 
-
         center_points_list_current.assign_time_to_all_elements()
         center_points_list_current.normalize_all_elements()
         return center_points_list_current
@@ -595,8 +600,9 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
                 PairPointCenterPoint(point, closest_center_point, min_distance, index + 1, time, label))
         return PairPointCenterPointList(pair_original_center)
 
-    def run_through_model(center_points_list : SurfacePointsFrameList, surface_data_list : SurfacePointsFrameList, model_weights_template:str, batch_size : int, num_points : int, nn_lr):
-        #todo check if should be normalized
+    def run_through_model(center_points_list: SurfacePointsFrameList, surface_data_list: SurfacePointsFrameList,
+                          model_weights_template: str, batch_size: int, num_points: int, nn_lr):
+        # todo check if should be normalized
         if len(center_points_list.list) != len(surface_data_list.list):
             raise Exception("Not same number of center points and surface data")
         pair_list_len = len(surface_data_list.list)
@@ -605,7 +611,6 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
         unique_times = surface_data_list.get_unique_times()
 
         evaluation_result_list = EvaluationResultList([])
-
 
         for i in range(0, pair_list_len):
 
@@ -638,7 +643,7 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
 
                 # Load the trained model for the current cluster
                 model_weights_filepath = model_weights_template.format(cluster=cluster)
-                model = _load_trained_model(model_weights_filepath, nn_lr)
+                model = _load_trained_model(model_weights_filepath, train_config)
                 device = torch.device(NN_DEVICE_STR)
 
                 model.to(device)
@@ -684,7 +689,7 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
     # run through the model
     evaluation_results_list = run_through_model(center_points_list,
                                                 surface_data_list,
-                                                train_config.file_path_config.model_weights_folderpath,
+                                                train_config.file_path_config.model_weights_folderpath_template,
                                                 train_config.nn_config.batch_size, num_points, nn_lr)
 
     variance_list = compute_variance(evaluation_results_list)
@@ -692,7 +697,8 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
     return variance_list, evaluation_results_list
 
 
-def _compute_mesh_shape_metrics(surface_data_list : SurfacePointsFrameList, train_config : TrainConfig, clustered_data : ClusteredCenterPointsAllFrames, nn_lr):
+def _compute_mesh_shape_metrics(surface_data_list: SurfacePointsFrameList, train_config: TrainConfig,
+                                clustered_data: ClusteredCenterPointsAllFrames, nn_lr):
     """
     Computes metrics which:
     1. loads mesh in one specified time
@@ -732,16 +738,15 @@ def _compute_mesh_shape_metrics(surface_data_list : SurfacePointsFrameList, trai
         # Compare eigenvalues (e.g., L2 distance)
         return np.linalg.norm(eigenvalues1 - eigenvalues2)
 
-    def label_points_by_clustered_data(surface_data_list : SurfacePointsFrameList, clustered_data : ClusteredCenterPointsAllFrames):
+    def label_points_by_clustered_data(surface_data_list: SurfacePointsFrameList,
+                                       clustered_data: ClusteredCenterPointsAllFrames):
         final_surface_data_list = SurfacePointsFrameList([])
 
         for i, surface_data_frame in enumerate(surface_data_list.list):
-
             mesh_points = surface_data_frame.points_list
             centers_points_frame = clustered_data.points_allframes[i]
             centers_labels_frame = clustered_data.labels_frame
-            #check indexes with filepath names
-
+            # check indexes with filepath names
 
             surface_labels = categorize_points_with_labels(centers_labels_frame, centers_points_frame, mesh_points)
             # append both values to list with names in the list
@@ -763,15 +768,12 @@ def _compute_mesh_shape_metrics(surface_data_list : SurfacePointsFrameList, trai
     mesh_points_allframes.assign_time_to_all_elements()
     mesh_points_allframes.normalize_all_elements()
 
-
-
-    model_weights_template = train_config.file_path_config.model_weights_folderpath
-    batch_size = train_config.nn_config.batch_size
+    time = 0
     original_points_all, processed_points_all, cluster_labels = run_model_decoder_all_times_with_selected_encoder_time(
-        mesh_points_allframes, model_weights_template,
-        batch_size, 0, nn_lr)
+        surface_data_list=mesh_points_allframes, time=time, train_config=train_config)
 
-    if len(loaded_meshes_list) != len(surface_data_list.list) and len(mesh_points_allframes.list) != len(surface_data_list.list):
+    if len(loaded_meshes_list) != len(surface_data_list.list) and len(mesh_points_allframes.list) != len(
+            surface_data_list.list):
         raise Exception("Not same number of loaded meshes and surface data")
 
     similarity_list = []
@@ -790,7 +792,7 @@ def _compute_mesh_shape_metrics(surface_data_list : SurfacePointsFrameList, trai
 
         processed_points_timeframe = processed_points_all[processed_points_all[:, 3] == time]
 
-        #convert to meshes
+        # convert to meshes
         original_mesh = trimesh.Trimesh(vertices=mesh_points_timeframe_points, faces=loaded_mesh_timeframe.faces)
         processed_mesh = trimesh.Trimesh(vertices=processed_points_timeframe, faces=loaded_mesh_timeframe.faces)
 
@@ -823,7 +825,7 @@ def evaluate(train_config: TrainConfig):
     # surface_data_list = convert_to_surface_data_list(surface_data_list)
 
     images_save_folderpath = train_config.file_path_config.images_save_folderpath
-    model_weights_template = train_config.file_path_config.model_weights_folderpath
+    model_weights_template = train_config.file_path_config.model_weights_folderpath_template
     point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath
     point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
     batch_size = train_config.nn_config.batch_size
@@ -844,22 +846,22 @@ def evaluate(train_config: TrainConfig):
     #     file.write(str(mesh_shape_metrics))
     # endregion
 
-
     # region Visulize
+    _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+                               images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_0"), time=0,
+                               train_config=train_config)
 
-    _visualize_uv_points_in_3d(surface_data_list, model_weights_template, os.path.join(images_save_folderpath, "time_uv_points_0"), batch_size, nn_lr, 0)
+    _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+                               images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_59"),
+                               time=59, train_config=train_config)
 
-    _visualize_uv_points_in_3d(surface_data_list, model_weights_template,
-                               os.path.join(images_save_folderpath, "time_uv_points_59"), batch_size, nn_lr, 59)
-
-    original_points_all, processed_points_all, cluster_labels = _prepare_export_data(surface_data_list,
-                                                                                     model_weights_template,
-                                                                                     batch_size, nn_lr)
+    original_points_all, processed_points_all, cluster_labels = _prepare_export_data(
+        surface_data_list=surface_data_list, train_config=train_config)
 
     _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
-                                                     os.path.join(images_save_folderpath, "time_combined_original_processed"), cluster_labels)
+                                                     os.path.join(images_save_folderpath,
+                                                                  "time_combined_original_processed"), cluster_labels)
     _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(images_save_folderpath, "time_clusters"))
-
 
     _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
     # Save the combined image

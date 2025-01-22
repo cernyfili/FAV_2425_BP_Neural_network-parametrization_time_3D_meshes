@@ -305,7 +305,7 @@ class SurfacePointsFrameList:
         """
         Return the list of time frames.
         """
-        return [surface_data.time for surface_data in self.list]
+        return [surface_data_element.time for surface_data_element in self.list]
 
     def get_meshes_list(self) -> MeshList:
         """

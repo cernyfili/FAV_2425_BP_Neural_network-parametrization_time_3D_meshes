@@ -29,7 +29,10 @@ def main():
         data_folders = ["ball_test"]
 
     for data_foldername in data_folders:
-        train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
+        nn_config = DEFAULT_NN_CONFIG
+        nn_config.loss_function_name = "chamfer"
+
+        train_config = TrainConfig(nn_config=nn_config,
                                    file_path_config=FilePathConfig(data_foldername=data_foldername),
                                    num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS,
                                    time_steps=MAX_TIME_STEPS)

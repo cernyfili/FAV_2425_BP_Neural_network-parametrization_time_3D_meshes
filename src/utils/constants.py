@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-TEST_MODE = False
+TEST_MODE = True
 
 # Restrict access to only uppercase constants
 def __getattr__(name):
@@ -17,6 +17,8 @@ nn_max_epochs = 10_000
 nn_patience = 5
 nn_batch_size = 128
 nn_lr = 1e-4
+
+loss_function_name : str = "standard"
 #nn_model = Simple_MLP_02()
 #nn_optimizer = optim.Adam(nn_model.parameters(), lr=nn_lr)
 
@@ -92,13 +94,14 @@ os.makedirs(default_processed_folderpath, exist_ok=True)
 
 
 class NNConfig:
-    def __init__(self, nn_max_epochs: int, nn_patience: int, nn_batch_size: int, nn_model, nn_optimizer, nn_lr : float):
+    def __init__(self, nn_max_epochs: int, nn_patience: int, nn_batch_size: int, nn_model, nn_optimizer, nn_lr : float, loss_function_name : str):
         self.max_epochs = nn_max_epochs
         self.patience = nn_patience
         self.batch_size = nn_batch_size
         self.model = nn_model
         self.optimizer = nn_optimizer
         self.nn_lr : float = nn_lr
+        self.loss_function_name : str = loss_function_name
 
     def __str__(self):
         return f"NNConfig(nn_max_epochs={self.max_epochs}, nn_patience={self.patience}, nn_batch_size={self.batch_size}, nn_model={self.model}, nn_optimizer={self.optimizer})"
@@ -108,7 +111,7 @@ class NNConfig:
 
 
 DEFAULT_NN_CONFIG = NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patience, nn_batch_size=nn_batch_size,
-                             nn_model=None, nn_optimizer=None, nn_lr=nn_lr)
+                             nn_model=None, nn_optimizer=None, nn_lr=nn_lr, loss_function_name=loss_function_name)
 
 
 class FilePathConfig:
@@ -139,7 +142,7 @@ class FilePathConfig:
 
         # EVAL IMAGES
         self.images_save_folderpath = os.path.join(processed_session_folderpath)
-        self.model_weights_folderpath = os.path.join(processed_session_folderpath, model_weights_templatename)
+        self.model_weights_folderpath_template = os.path.join(processed_session_folderpath, model_weights_templatename)
         self.point_cloud_original_filepath = os.path.join(processed_session_folderpath, point_cloud_original_filename)
         self.point_cloud_processed_filepath = os.path.join(processed_session_folderpath, point_cloud_processed_filename)
 
@@ -149,15 +152,15 @@ class FilePathConfig:
         self.mesh_shape_metrics_filepath = os.path.join(processed_session_folderpath, mesh_shape_metrics)
 
     def __str__(self):
-        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_folderpath}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
+        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_folderpath_template}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
 
     def __repr__(self):
-        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_folderpath}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
+        return f"FilePathConfig(raw_data_folderpath={self.raw_data_folderpath}, image_save_folderpath={self.images_save_folderpath}, surface_data_filepath={self.surface_data_filepath}, clustered_data_filepath={self.clustered_data_filepath}, model_weights_template={self.model_weights_folderpath_template}, point_cloud_original_filename={self.point_cloud_original_filepath}, point_cloud_processed_filename={self.point_cloud_processed_filepath})"
 
 
 class TrainConfig:
-    def __init__(self, nn_config: NNConfig, file_path_config: FilePathConfig, num_clusters=NUM_CLUSTERS,
-                 num_surface_points=NUM_SURFACE_POINTS, time_steps=None):
+    def __init__(self, nn_config: NNConfig, file_path_config: FilePathConfig, num_clusters,
+                 num_surface_points, time_steps):
         self.num_clusters = num_clusters
         self.num_surface_points = num_surface_points
         self.nn_config = nn_config

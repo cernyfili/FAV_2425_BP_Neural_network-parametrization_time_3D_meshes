@@ -15,8 +15,9 @@ import torch
 import trimesh
 from torch import optim, nn, tensor
 
-from data_processing.class_mapping import MeshList
+from data_processing.class_mapping import MeshList, TimeFrame
 from nerual_network.class_model import Simple_MLP_02
+from utils.constants import TrainConfig, loss_function_name
 from utils.helpers import get_meshes_list
 
 
@@ -144,9 +145,13 @@ def _loss_function_standard(inputs, targets, model, loss_info):
 
 
 def _loss_function_chamfer(inputs, targets, model, loss_info):
-    def __prepare_data(device, inputs, model, meshes_list: MeshList):
+    def __get_random_time_from_time_list(time_list : list[TimeFrame]) -> tuple[float, int]:
+        random_time_element = np.random.choice(time_list)
+        return random_time_element.value, random_time_element.index
+
+    def __prepare_data(device, inputs, model, meshes_list: MeshList, time_list : list[TimeFrame]):
         # select one random time from inputs
-        time_value, time_index = __get_random_time(inputs)
+        time_value, time_index = __get_random_time_from_time_list(time_list)
 
         # remove last columen (time_index) from inputs
         inputs_encoder = prepare_encoder_input_data(inputs)
@@ -166,8 +171,9 @@ def _loss_function_chamfer(inputs, targets, model, loss_info):
 
     meshes_list = loss_info['meshes_list']
     device = loss_info['device']
+    time_list : list[TimeFrame] = loss_info['time_list']
 
-    decoded_mesh_v, original_mesh_f, original_mesh_v = __prepare_data(device, inputs, model, meshes_list)
+    decoded_mesh_v, original_mesh_f, original_mesh_v = __prepare_data(device, inputs, model, meshes_list, time_list)
     # Compute one-way Chamfer Distance loss
     # original_mesh_v = torch.tensor(original_mesh_v, device=device, requires_grad=False)
     # original_mesh_f = torch.tensor(original_mesh_f, device=device, requires_grad=False)
@@ -320,12 +326,7 @@ def _loss_function_uv_streach(inputs, targets, model, loss_info):
 
 # endregion
 
-# Configuration function to initialize model, optimizer, and criterion
-def get_training_config(nn_lr) -> (nn.Module, optim.Optimizer, nn.Module):
-    model = Simple_MLP_02()
-    optimizer = optim.Adam(model.parameters(), lr=nn_lr)
-    loss_function = _loss_function_chamfer_better_random_dist
-    return model, optimizer, loss_function
+
 
 
 def prepare_encoder_input_data(inputs):
@@ -348,3 +349,23 @@ def get_loaded_meshes_list(meshes_folder_path: str):
         mesh = trimesh.load(mesh_filepath)
         loaded_meshes_list.append(mesh)
     return loaded_meshes_list
+
+
+
+LOSS_FUNCTIONS_LIST : dict[str : callable] = {
+    'standard': _loss_function_standard,
+    'chamfer': _loss_function_chamfer,
+    'chamfer_better_random_dist': _loss_function_chamfer_better_random_dist,
+    'uv_streach': _loss_function_uv_streach
+}
+
+
+# Configuration function to initialize model, optimizer, and criterion
+def init_training_config(train_config : TrainConfig) -> (nn.Module, optim.Optimizer, nn.Module):
+    nn_lr = train_config.nn_config.nn_lr
+    loss_function_name = train_config.nn_config.loss_function_name
+
+    model = Simple_MLP_02()
+    optimizer = optim.Adam(model.parameters(), lr=nn_lr)
+    loss_function = LOSS_FUNCTIONS_LIST[loss_function_name]
+    return model, optimizer, loss_function
