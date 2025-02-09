@@ -5,7 +5,7 @@ import os
 import numpy as np
 from sklearn.cluster import DBSCAN
 
-from src.utils.constants import RAW_DATA_ALLOWED_FILETYPES_LIST
+from utils.constants import CDataPreprocessing
 from utils.helpers import get_file_index_from_filename
 
 
@@ -22,7 +22,12 @@ def _euclidean_distance(p1, p2):
 
 
 # Function to load .xyz files
-def _load_xyz_files(filepaths):
+def _load_xyz_files(filepaths) -> np.ndarray:
+    """
+
+    :param filepaths:
+    :return:  np.ndarray of shape (num_files, num_time_steps, num_points, 3)
+    """
     num_points_in_file = None
     points_allframes = []
 
@@ -130,19 +135,19 @@ def _load_bin_files(filepaths):
     return np.array(data) # Shape: (num_files, num_time_steps, num_points)
 
 
-def load_centers_data(folder_path, time_steps):
+def load_centers_data(folder_path, time_steps) -> np.ndarray:
     """
     Load .xyz files or .bin files from the specified folder and compute the maximum distances between points.
     :param folder_path: path to where is files with computed centers points
     :param file_type:
     :return:
-       data: np.ndarray of shape (num_files, num_time_steps, num_points, 3)
+       data: np.ndarray of shape element (x, y, z)
     """
     # find file types of all files in the folder
     file_types = []
     for file in os.listdir(folder_path):
         # from the list of allowed file types
-        if file.split('.')[-1] in RAW_DATA_ALLOWED_FILETYPES_LIST:
+        if file.split('.')[-1] in CDataPreprocessing.RAW_DATA_ALLOWED_FILETYPES_LIST:
             file_types.append(file.split('.')[-1])
     # check if all files are of the same type
     if len(set(file_types)) > 1:

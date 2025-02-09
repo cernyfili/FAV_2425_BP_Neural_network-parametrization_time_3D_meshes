@@ -1,7 +1,8 @@
 import os
+from dataclasses import dataclass
 from datetime import datetime
 
-TEST_MODE = False
+TEST_MODE = True
 
 # Restrict access to only uppercase constants
 def __getattr__(name):
@@ -29,17 +30,14 @@ else:
 # endregion
 
 # region Data processing constants
-NUM_CLUSTERS = 5
+@dataclass(frozen=True)
+class CDataPreprocessing:
+    NUM_CLOSEST_CENTERS_TO_POINT = 3
+    NUM_CLUSTERS = 5
+    NUM_SURFACE_POINTS = 10_000
+    MAX_TIME_STEPS = 100
+    RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 
-NUM_SURFACE_POINTS = 10_000
-
-MAX_TIME_STEPS = 100
-
-RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
-# endregion
-
-
-# region Data constants
 # endregion
 
 # region Filepaths constants
@@ -176,5 +174,5 @@ class TrainConfig:
 
 DEFAULT_TRAIN_CONFIG = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername="default"),
-                                   num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS, time_steps=MAX_TIME_STEPS)
+                                   num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS, time_steps=CDataPreprocessing.MAX_TIME_STEPS)
 EVAL_NUM_SURFACE_POINTS = 1000

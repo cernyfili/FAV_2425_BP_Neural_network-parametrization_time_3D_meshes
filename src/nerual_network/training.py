@@ -70,11 +70,11 @@ def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_
     epochs_no_improve = 0
     best_epoch = 0
     best_checkpoint = None
+    loss_function_info = {'meshes_list': meshes_list, 'device': device, 'time_list': time_list, 'data': data}
 
     for epoch in range(1, num_epochs + 1):
         # Train and evaluate for one epoch
 
-        loss_function_info = {'meshes_list': meshes_list, 'device': device, 'time_list': time_list}
         train_loss = _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info)
         val_loss = _evaluate(model, val_loader, loss_function, device, loss_function_info)
 

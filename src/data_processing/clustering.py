@@ -26,9 +26,9 @@ def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filep
     with open(clustered_data_filepath, 'wb') as f:
         pickle.dump(clustered_points, f)
 
-def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes, time_steps):
+def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes, time_steps) -> ClusteredCenterPointsAllFrames:
 
-    center_points_allframes = load_centers_data(folder_path_meshes, time_steps)
+    center_points_allframes : np.array = load_centers_data(folder_path_meshes, time_steps) # (x,y,z)
     max_distances_mx = compute_max_distances_for_all_pairs(center_points_allframes)
 
     cluster_center_labels = _hierarchical_clustering_from_precomputed_distances(max_distances_mx, n_clusters=num_clusters)
@@ -62,6 +62,14 @@ def _hierarchical_clustering_from_precomputed_distances(distances, n_clusters=4,
 
 # Function to process and save clustered data if not already processed
 def process_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps):
+    """
+    Saves all points of centers which was labeled by hierarchical clustering
+    :param num_clusters:
+    :param raw_data_folderpath:
+    :param clustered_data_filepath:
+    :param time_steps:
+    :return:
+    """
     if not os.path.exists(clustered_data_filepath):
         _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps)
         logging.info("Clustered data processed and saved.")

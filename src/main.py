@@ -5,8 +5,8 @@ from nerual_network.evaluation import evaluate
 from nerual_network.training import train_nn
 from src.data_processing.clustering import process_clustered_data
 from src.data_processing.mapping import process_surface_data
-from utils.constants import DEFAULT_NN_CONFIG, NUM_CLUSTERS, \
-    NUM_SURFACE_POINTS, MAX_TIME_STEPS, FilePathConfig, TrainConfig, TEST_MODE
+from utils.constants import DEFAULT_NN_CONFIG, FilePathConfig, TrainConfig, \
+    TEST_MODE, CDataPreprocessing
 from utils.helpers import init_logger, end_logger
 
 
@@ -32,8 +32,8 @@ def main():
 
         train_config = TrainConfig(nn_config=DEFAULT_NN_CONFIG,
                                    file_path_config=FilePathConfig(data_foldername=data_foldername),
-                                   num_clusters=NUM_CLUSTERS, num_surface_points=NUM_SURFACE_POINTS,
-                                   time_steps=MAX_TIME_STEPS)
+                                   num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS,
+                                   time_steps=CDataPreprocessing.MAX_TIME_STEPS)
 
         train_config.nn_config.loss_function_name = "chamfer"
 

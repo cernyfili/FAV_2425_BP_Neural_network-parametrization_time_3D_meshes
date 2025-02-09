@@ -15,7 +15,8 @@ import torch
 import trimesh
 from torch import optim, nn, tensor
 
-from data_processing.class_mapping import MeshList, TimeFrame
+from data_processing.class_mapping import MeshList, TimeFrame, SurfacePointsFrameList, SurfacePointsFrame, \
+    compute_closest_centers
 from nerual_network.class_model import Simple_MLP_02
 from utils.constants import TrainConfig, loss_function_name
 from utils.helpers import get_meshes_list
@@ -258,50 +259,51 @@ def _compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor, 
 
     return loss_list
 
+def _get_time_tensor_from_input(inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    # Extract the time value column (assuming it's the 4th column)
+    time_value_column = inputs[:, 3]
+
+    # Extract the time index column (assuming it's the 5th column)
+    time_index_column = inputs[:, 4]
+
+    # generate tensor of with 2 columns where you randomly select time values from time_value_column and add corresponding time_index
+    # random_index = torch.randint(0, time_value_column.size(0), (1,)).item()
+    # random_time_value_tensor = time_value_column[random_index]
+    #
+    # # Retrieve the time value and time index at the selected index
+    # random_time_index_tensor = time_index_column[random_index]
+    time_value_tensor = time_value_column
+    time_index_tensor = time_index_column
+
+    return time_value_tensor, time_index_tensor
+
+def _get_decoder_input_data(device, inputs, model):
+    # select one random time from inputs
+    time_value_tensor, time_index_tensor = _get_time_tensor_from_input(inputs)
+
+    # remove last columen (time_index) from inputs
+    inputs_encoder = prepare_encoder_input_data(inputs)
+
+    # Forward pass: Encoder and Decoder
+    encoded = model.encoder(inputs_encoder)
+
+    # add time_value_tensor to encoded features
+    decoder_input_data = torch.cat((encoded, time_value_tensor.unsqueeze(1)), dim=1).to(device)
+
+    #add time_index_tensor to decoder_input_data
+    decoder_input_data = torch.cat((decoder_input_data, time_index_tensor.unsqueeze(1)), dim=1).to(device)
+
+    return decoder_input_data
 
 def _loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info):
-    def __get_time_tensor(inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # Extract the time value column (assuming it's the 4th column)
-        time_value_column = inputs[:, 3]
 
-        # Extract the time index column (assuming it's the 5th column)
-        time_index_column = inputs[:, 4]
-
-        # generate tensor of with 2 columns where you randomly select time values from time_value_column and add corresponding time_index
-        # random_index = torch.randint(0, time_value_column.size(0), (1,)).item()
-        # random_time_value_tensor = time_value_column[random_index]
-        #
-        # # Retrieve the time value and time index at the selected index
-        # random_time_index_tensor = time_index_column[random_index]
-        time_value_tensor = time_value_column
-        time_index_tensor = time_index_column
-
-        return time_value_tensor, time_index_tensor
-
-    def __prepare_data(device, inputs, model):
-        # select one random time from inputs
-        time_value_tensor, time_index_tensor = __get_time_tensor(inputs)
-
-        # remove last columen (time_index) from inputs
-        inputs_encoder = prepare_encoder_input_data(inputs)
-
-        # Forward pass: Encoder and Decoder
-        encoded = model.encoder(inputs_encoder)
-
-        # add time_value_tensor to encoded features
-        decoder_input_data = torch.cat((encoded, time_value_tensor.unsqueeze(1)), dim=1).to(device)
-
-        #add time_index_tensor to decoder_input_data
-        decoder_input_data = torch.cat((decoder_input_data, time_index_tensor.unsqueeze(1)), dim=1).to(device)
-
-        return decoder_input_data
 
     select_function = __select_unique_time_values
 
     meshes_list = loss_info['meshes_list']
     device = loss_info['device']
 
-    decoder_data = __prepare_data(device, inputs, model)
+    decoder_data = _get_decoder_input_data(device, inputs, model)
     loss_chamfer_list = _compute_loss_chamfer_distance_with_time_tensor(decoder_data=decoder_data, meshes_list=meshes_list,
                                                                    decoder=model.decoder, select_times_function=select_function)
 
@@ -322,6 +324,84 @@ def _loss_function_uv_streach(inputs, targets, model, loss_info):
     loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
 
     return loss_uv_streach + loss_standard
+
+
+def __compute_distance_loss(original_data : SurfacePointsFrame, decoded_data : torch.tensor):
+    # region Compute closest centers for decoded_data
+    decoded_data_np = decoded_data.detach().cpu().numpy()
+    centers_np = original_data.centers_points
+
+    closest_centers = compute_closest_centers(decoded_data_np, centers_np)
+    # endregion
+
+    original_centers = original_data.closest_centers_list
+
+    # check
+    if len(closest_centers) != len(original_centers):
+        raise ValueError("Length of closest_centers and original_centers must be the same")
+
+    # run distances of closest_centers variable through normal distribution
+    # Extract distances
+    closest_distances = [center.distance for centers in closest_centers for center in centers]
+    original_distances = [center.distance for centers in original_centers for center in centers]
+
+    # Convert to tensors
+    closest_distances_tensor = torch.tensor(closest_distances)
+    original_distances_tensor = torch.tensor(original_distances)
+
+    # Create a normal distribution with mean and std of original distances
+    mean_original = torch.mean(original_distances_tensor)
+    std_original = torch.std(original_distances_tensor)
+    normal_dist = torch.distributions.Normal(mean_original, std_original)
+
+    # Convert distances to probabilities
+    prob_closest = normal_dist.cdf(closest_distances_tensor)
+    prob_original = normal_dist.cdf(original_distances_tensor)
+
+    # Compute the loss as the mean squared error between the probabilities
+    loss = nn.MSELoss()(prob_closest, prob_original)
+    return loss
+
+
+
+
+
+def _compute_loss_function_centers(inputs, targets, model, loss_info):
+    data : SurfacePointsFrameList = loss_info['data']
+    device = loss_info['device']
+    time_list = loss_info['time_list'] # list of TimeFrame
+
+    # remove last columen (time_index) from inputs
+    inputs_encoder = prepare_encoder_input_data(inputs)
+
+    # Forward pass: Encoder
+    encoded_data = model.encoder(inputs_encoder)
+
+    loss_list = []
+
+    for time_frame in time_list:
+        time_value = time_frame.value
+        time_index = time_frame.index
+
+        original_data = data.get_element_by_time_index(time_index)
+
+        decoder_input_data = prepare_decoder_input_data(device=device, encoded_features=encoded_data, time_value=time_value)
+        decoded_data = model.decoder(decoder_input_data)
+
+        loss_distances = __compute_distance_loss(original_data, decoded_data)
+        loss_list.append(loss_distances)
+
+    # sum of all losses
+    loss = torch.stack(loss_list).sum()
+    return loss
+
+def _loss_function_centers(inputs, targets, model, loss_info):
+    loss_centers = _compute_loss_function_centers(inputs, targets, model, loss_info)
+    loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
+
+    loss = loss_centers + loss_standard
+    return loss
+
 
 
 # endregion
@@ -356,7 +436,8 @@ LOSS_FUNCTIONS_LIST : dict[str : callable] = {
     'standard': _loss_function_standard,
     'chamfer': _loss_function_chamfer,
     'chamfer_better_random_dist': _loss_function_chamfer_better_random_dist,
-    'uv_streach': _loss_function_uv_streach
+    'uv_streach': _loss_function_uv_streach,
+    'centers': _compute_loss_function_centers
 }
 
 

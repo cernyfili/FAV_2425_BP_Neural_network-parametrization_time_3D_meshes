@@ -9,7 +9,6 @@ from scipy.spatial import KDTree
 
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
-from data_processing.data_structures import MeshNDArray
 from src.utils.helpers import load_pickle_file, get_meshes_list
 from utils.helpers import get_file_index_from_filename
 
@@ -124,8 +123,8 @@ def categorize_points_with_labels(centers_labels_frame, centers_points_frame, po
     return surface_labels
 
 
-def _create_surface_points_from_mesh_list(meshes_filepaths_list : list, clustered_data : ClusteredCenterPointsAllFrames,
-                                          num_surface_points : int):
+def _create_surface_points_from_mesh_list(meshes_filepaths_list: list, clustered_data: ClusteredCenterPointsAllFrames,
+                                          num_surface_points: int):
     """
     Create surface points for each mesh in the list.
 
@@ -145,7 +144,7 @@ def _create_surface_points_from_mesh_list(meshes_filepaths_list : list, clustere
         mesh = trimesh.load(mesh_file_path)
         centers_points_frame = clustered_data.points_allframes[i]
         center_labels_frame = clustered_data.labels_frame
-        #check indexes with filepath names
+        # check indexes with filepath names
 
         # file index is the last 3 characters before filetype
         file_index = get_file_index_from_filename(mesh_file_path, min_file_index)
@@ -158,7 +157,8 @@ def _create_surface_points_from_mesh_list(meshes_filepaths_list : list, clustere
                                                                             num_surface_points)
 
         # append both values to list with names in the list
-        surface_data_list.append(SurfacePointsFrame(surface_points, surface_labels, None, mesh))
+        surface_data_list.append(
+            SurfacePointsFrame(surface_points=surface_points, surface_labels=surface_labels, time=None, mesh=mesh, centers_points=centers_points_frame))
 
     return surface_data_list
 
@@ -184,7 +184,7 @@ def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_fo
     return surface_data_list
 
 
-def _save_surface_data(clustered_data : ClusteredCenterPointsAllFrames, num_surface_points, meshes_folder_path,
+def _save_surface_data(clustered_data: ClusteredCenterPointsAllFrames, num_surface_points, meshes_folder_path,
                        surface_data_filepath):
     surface_data_list = _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path)
 
@@ -248,7 +248,7 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
     v0 = vertices[faces[:, 0]]
     v1 = vertices[faces[:, 1]]
     v2 = vertices[faces[:, 2]]
-    cross_products = np.cross(v1 - v0, v2 - v0) #todo check why inreachable
+    cross_products = np.cross(v1 - v0, v2 - v0)  # todo check why inreachable
     areas = 0.5 * np.linalg.norm(cross_products, axis=1)
     total_area = np.sum(areas)
     probabilities = areas / total_area
