@@ -176,7 +176,8 @@ def _prepare_surface_data(meshes_filepaths_list, clustered_data, num_surface_poi
 
 def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path):
     # meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
-    meshes_filepaths_list = get_meshes_list(meshes_folder_path)
+    len_clustered_data = len(clustered_data.points_allframes)
+    meshes_filepaths_list = get_meshes_list(meshes_folder_path, len_clustered_data)
     logging.info("Creating surface points for all meshes...")
     surface_data_list = _prepare_surface_data(meshes_filepaths_list, clustered_data, num_surface_points)
     logging.info("Surface points created and normalized.")

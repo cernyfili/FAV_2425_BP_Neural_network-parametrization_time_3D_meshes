@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-TEST_MODE = True
+TEST_MODE = False
 
 # Restrict access to only uppercase constants
 def __getattr__(name):

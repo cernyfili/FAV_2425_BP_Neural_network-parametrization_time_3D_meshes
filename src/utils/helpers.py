@@ -76,7 +76,7 @@ def get_file_pairs_from_numbers(folder_path):
         raise Exception("No data pairs found")
     return file_pairs_list
 
-def get_meshes_list(meshes_folder_path):
+def get_meshes_list(meshes_folder_path, len_clustered_data):
     """
     Get a list of .obj file paths from the specified folder.
 
@@ -89,7 +89,12 @@ def get_meshes_list(meshes_folder_path):
     obj_files_list = []
     files = os.listdir(meshes_folder_path)
 
+    max_time_steps = min(len(files), len_clustered_data)
+
+    files = files[:max_time_steps]
+
     min_index = get_file_index_from_filename(files[0])
+
     # Select only .obj files
     for filename in files:
         if filename.endswith('.obj'):

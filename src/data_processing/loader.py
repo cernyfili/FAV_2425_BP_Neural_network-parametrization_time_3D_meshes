@@ -162,7 +162,9 @@ def load_centers_data(folder_path, time_steps):
     if time_steps is None:
         max_time_steps = len(filepaths)
     else:
-        max_time_steps = max(time_steps, len(filepaths))
+        max_time_steps = min(time_steps, len(filepaths))
+
+    logging.info(f"Max time steps is {max_time_steps}")
 
     filepaths = filepaths[:max_time_steps]
 
