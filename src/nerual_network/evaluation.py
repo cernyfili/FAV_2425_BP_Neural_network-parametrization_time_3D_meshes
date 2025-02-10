@@ -13,13 +13,11 @@ from data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
 from data_processing.loader import load_centers_data
 from data_processing.mapping import categorize_points_with_labels
-from nerual_network.class_evaluation import PairPointCenterPoint, PairPointCenterPointList, DecoderElement, \
-    DecoderPairList, EvaluationResult, EvaluationResultList
+from nerual_network.class_evaluation import PairPointCenterPoint, PairPointCenterPointList, DecoderElement, DecoderPairList, EvaluationResult, EvaluationResultList
 from src.nerual_network.class_model import NNDataset
 from utils.constants import NN_DEVICE_STR, TrainConfig
 from utils.helpers import load_pickle_file
-from utils.nn_config_utils import init_training_config, prepare_decoder_input_data, get_loaded_meshes_list, \
-    prepare_encoder_input_data
+from utils.nn_config_utils import init_training_config, prepare_decoder_input_data, get_loaded_meshes_list, prepare_encoder_input_data
 
 
 # Restrict access to underscore-prefixed functions

@@ -35,7 +35,7 @@ def main():
                                    num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS,
                                    time_steps=CDataPreprocessing.MAX_TIME_STEPS)
 
-        train_config.nn_config.loss_function_name = "chamfer"
+        train_config.nn_config.loss_function_name = "centers"
 
         if TEST_MODE:
             train_config.nn_config.max_epochs = 2

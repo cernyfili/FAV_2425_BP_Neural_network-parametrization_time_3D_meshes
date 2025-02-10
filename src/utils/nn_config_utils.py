@@ -13,10 +13,11 @@ import igl
 import numpy as np
 import torch
 import trimesh
+from numpy import ndarray
 from torch import optim, nn, tensor
 
 from data_processing.class_mapping import MeshList, TimeFrame, SurfacePointsFrameList, SurfacePointsFrame, \
-    compute_closest_centers
+    compute_closest_centers, compute_distances_to_original_points_centers, compute_closest_centers_tensor
 from nerual_network.class_model import Simple_MLP_02
 from utils.constants import TrainConfig, loss_function_name
 from utils.helpers import get_meshes_list
@@ -191,12 +192,12 @@ def _loss_function_chamfer(inputs, targets, model, loss_info):
     return combined_loss
 
 # function which will return torch with time values from argument inputs
-def __select_unique_time_values(time_value_tensor: torch.Tensor) -> torch.Tensor:
+def __select_unique_time(time_tensor: torch.Tensor) -> torch.Tensor:
 
     # get unique time values
-    unique_time_values = torch.unique(time_value_tensor)
+    unique_times = torch.unique(time_tensor)
 
-    return unique_time_values
+    return unique_times
 
 # function which will return time_values list where is the two most common time values
 def __select_most_common_time_values(time_value_tensor: torch.Tensor, num_values = 2) -> torch.Tensor:
@@ -298,7 +299,7 @@ def _get_decoder_input_data(device, inputs, model):
 def _loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info):
 
 
-    select_function = __select_unique_time_values
+    select_function = __select_unique_time
 
     meshes_list = loss_info['meshes_list']
     device = loss_info['device']
@@ -326,77 +327,114 @@ def _loss_function_uv_streach(inputs, targets, model, loss_info):
     return loss_uv_streach + loss_standard
 
 
-def __compute_distance_loss(original_data : SurfacePointsFrame, decoded_data : torch.tensor):
-    # region Compute closest centers for decoded_data
-    decoded_data_np = decoded_data.detach().cpu().numpy()
-    centers_np = original_data.centers_points
+def __compute_center_distance_loss(input_points : torch.Tensor, decoded_points : torch.Tensor, centers_points : ndarray) -> torch.tensor:
+    """
 
-    closest_centers = compute_closest_centers(decoded_data_np, centers_np)
+    :param input_points: input points and decoded points is same points on same index
+    :param decoded_points:
+    :param centers_points:
+    :return:
+    """
+    # region SANITY CHECKS
+    if len(input_points) != len(decoded_points):
+        raise ValueError("Length of input_points and decoded_data must be the same")
+
+    if input_points.shape[1] != 3:
+        raise ValueError("Input points must have 3 columns")
+    if decoded_points.shape[1] != 3:
+        raise ValueError("Decoded data must have 3 columns")
+    if centers_points.shape[1] != 3:
+        raise ValueError("Center points must have 3 columns")
+    if not isinstance(centers_points, ndarray):
+        raise ValueError("Center points must be a numpy array ")
     # endregion
 
-    original_centers = original_data.closest_centers_list
+    # convert to distances numpy array
+    input_centers_list = compute_closest_centers(input_points, centers_points)
+
+    centers_points_tensor = torch.tensor(centers_points, device=input_points.device)
+    centers_points_tensor.requires_grad_(True)
+
+    input_centers_distances = compute_closest_centers_tensor(input_points, centers_points_tensor)
+    
+    # region Compute closest centers for decoded_data
+
+    decoded_centers_distances = compute_distances_to_original_points_centers(decoded_points, input_centers_list)
+    # endregion
 
     # check
-    if len(closest_centers) != len(original_centers):
+    if input_centers_distances.shape != decoded_centers_distances.shape:
         raise ValueError("Length of closest_centers and original_centers must be the same")
 
-    # run distances of closest_centers variable through normal distribution
-    # Extract distances
-    closest_distances = [center.distance for centers in closest_centers for center in centers]
-    original_distances = [center.distance for centers in original_centers for center in centers]
-
-    # Convert to tensors
-    closest_distances_tensor = torch.tensor(closest_distances)
-    original_distances_tensor = torch.tensor(original_distances)
-
     # Create a normal distribution with mean and std of original distances
-    mean_original = torch.mean(original_distances_tensor)
-    std_original = torch.std(original_distances_tensor)
+    mean_original = torch.mean(input_centers_distances)
+    std_original = torch.std(input_centers_distances)
     normal_dist = torch.distributions.Normal(mean_original, std_original)
-
-    # Convert distances to probabilities
-    prob_closest = normal_dist.cdf(closest_distances_tensor)
-    prob_original = normal_dist.cdf(original_distances_tensor)
+    #
+    # # Convert distances to probabilities
+    # prob_decoded = normal_dist.cdf(decoded_centers_distances)
+    # prob_input = normal_dist.cdf(input_centers_distances)
 
     # Compute the loss as the mean squared error between the probabilities
-    loss = nn.MSELoss()(prob_closest, prob_original)
+    loss = nn.MSELoss()(input_centers_distances, decoded_centers_distances)
     return loss
 
 
 
 
 
-def _compute_loss_function_centers(inputs, targets, model, loss_info):
+def _compute_loss_function_centers(inputs, targets, model, loss_info) -> list:
     data : SurfacePointsFrameList = loss_info['data']
     device = loss_info['device']
     time_list = loss_info['time_list'] # list of TimeFrame
 
-    # remove last columen (time_index) from inputs
-    inputs_encoder = prepare_encoder_input_data(inputs)
+    # from dat
 
-    # Forward pass: Encoder
-    encoded_data = model.encoder(inputs_encoder)
+    decoder_input_data_all = _get_decoder_input_data(device, inputs, model)
+    time_index_tensor = decoder_input_data_all[:, 3]
+
+    decoder_input_data = decoder_input_data_all[:, :3]  # remove last column (time_index)
+    decoded_data = model.decoder(decoder_input_data)
+
+    unique_time_elements = __select_unique_time(time_index_tensor)
 
     loss_list = []
 
-    for time_frame in time_list:
-        time_value = time_frame.value
-        time_index = time_frame.index
+    for time_index in unique_time_elements:
 
+        # indices from time_index_tensor where is the time_index
+        indices_time_index_tensor = time_index_tensor == time_index
+
+        filtered_decoded_data = decoded_data[indices_time_index_tensor]
+        filtered_decoded_data.requires_grad_(True)
+
+        # original data
         original_data = data.get_element_by_time_index(time_index)
+        centers_points = original_data.centers_points
 
-        decoder_input_data = prepare_decoder_input_data(device=device, encoded_features=encoded_data, time_value=time_value)
-        decoded_data = model.decoder(decoder_input_data)
+        # get first 3 columns from inputs
+        filtered_input_data = inputs[:, :3]
 
-        loss_distances = __compute_distance_loss(original_data, decoded_data)
+        filtered_input_data = filtered_input_data[indices_time_index_tensor]
+        filtered_input_data.requires_grad_(True)
+
+        # find indices from original_points which are the same point values as in filtered_input_data
+
+        # indices_original_points_np = np.where(np.isin(original_points_np, filtered_input_data_np).all(axis=1))[0]
+        # 
+        # filtered_original_centers = original_centers_np[indices_original_points_np]
+
+        # get first 3 columns
+
+        loss_distances = __compute_center_distance_loss(filtered_input_data, filtered_decoded_data, centers_points)
         loss_list.append(loss_distances)
 
-    # sum of all losses
-    loss = torch.stack(loss_list).sum()
-    return loss
+    return loss_list
 
 def _loss_function_centers(inputs, targets, model, loss_info):
-    loss_centers = _compute_loss_function_centers(inputs, targets, model, loss_info)
+    loss_centers_list = _compute_loss_function_centers(inputs, targets, model, loss_info)
+    loss_centers = torch.stack(loss_centers_list).mean()
+
     loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
 
     loss = loss_centers + loss_standard
