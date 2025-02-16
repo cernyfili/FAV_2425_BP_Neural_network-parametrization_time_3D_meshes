@@ -144,7 +144,7 @@ def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: 
     val_dataset = Subset(dataset, val_indices)
 
     # Create data loaders for training and validation
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     return train_loader, val_loader

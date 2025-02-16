@@ -16,7 +16,7 @@ def __getattr__(name):
 # region Neural network constants
 nn_max_epochs = 10_000
 nn_patience = 5
-nn_batch_size = 128
+nn_batch_size = 32
 nn_lr = 1e-4
 
 loss_function_name : str = "standard"
@@ -27,6 +27,9 @@ if TEST_MODE:
     NN_DEVICE_STR = 'cpu'
 else:
     NN_DEVICE_STR = 'cuda'
+
+LOSS_FUNC_NORMAL_DIST_MEAN = 0.0
+LOSS_FUNC_NORMAL_DIST_STD = 1.0
 # endregion
 
 # region Data processing constants

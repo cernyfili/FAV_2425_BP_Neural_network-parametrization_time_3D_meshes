@@ -158,7 +158,7 @@ def _create_surface_points_from_mesh_list(meshes_filepaths_list: list, clustered
 
         # append both values to list with names in the list
         surface_data_list.append(
-            SurfacePointsFrame(surface_points=surface_points, surface_labels=surface_labels, time=None, mesh=mesh, centers_points=centers_points_frame))
+            SurfacePointsFrame.create_instance(surface_points=surface_points, surface_labels=surface_labels, time=None, mesh=mesh, centers_points=centers_points_frame))
 
     return surface_data_list
 

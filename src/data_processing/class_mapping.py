@@ -58,16 +58,19 @@ class TimeFrame:
     def __repr__(self):
         return f"TimeFrame(index={self.index}, value={self.value})"
 
+@dataclass
+class CentersInfo:
+    points: ndarray
+    kd_tree: KDTree
 
 class SurfacePointsFrame:
     """
     Class to represents points in object for one cluster and for a single time step.
     """
 
-    def __init__(self, surface_points, surface_labels, time: TimeFrame, mesh: Trimesh,
-                 centers_points: np.array):
+    def __init__(self, surface_points, surface_labels, time: TimeFrame | None, mesh: Trimesh,
+                 centers_points: np.array, center_info : CentersInfo = None):
         """
-
         :param surface_points:
         :param surface_labels:
         :param time:
@@ -98,7 +101,22 @@ class SurfacePointsFrame:
 
         self.time = time
         self._mesh: Trimesh = mesh
-        self._centers_points: np.array = centers_points
+
+        self._centers_info: CentersInfo | None = None
+
+        if center_info is not None:
+            self._centers_info = center_info
+        elif centers_points is not None:
+            kd_tree : KDTree = KDTree(centers_points)
+            self._centers_info = CentersInfo(points=centers_points, kd_tree=kd_tree)
+
+    @classmethod
+    def create_instance(cls, surface_points, surface_labels, time: TimeFrame, mesh: Trimesh, centers_points: np.array):
+        return cls(surface_points, surface_labels, time, mesh, centers_points)
+
+    @classmethod
+    def duplicate_instances(cls, surface_points, surface_labels, time: TimeFrame, mesh: Trimesh, centers_info: CentersInfo):
+        return cls(surface_points, surface_labels, time, mesh, None, centers_info)
 
     def slice_arrays(self, id):
         if id >= len(self.labeled_points_list.list):
@@ -124,9 +142,9 @@ class SurfacePointsFrame:
         """
         filtered_data = self.labeled_points_list.filter_by_label(label_index)
         # return SurfacePointsFrame(filtered_data.get_points(), filtered_data.get_labels(), self.time)
-        points_frame = SurfacePointsFrame(surface_points=filtered_data.get_points(),
+        points_frame = SurfacePointsFrame.duplicate_instances(surface_points=filtered_data.get_points(),
                                           surface_labels=filtered_data.get_labels(), time=self.time,
-                                          mesh=self.mesh, centers_points=self.centers_points)
+                                          mesh=self.mesh, centers_info=self.centers_info)
         return points_frame
 
     @property
@@ -165,10 +183,10 @@ class SurfacePointsFrame:
         return self._mesh
 
     @property
-    def centers_points(self) -> np.array:
-        if self._centers_points is None:
-            raise ValueError("Centers points are not loaded.")
-        return self._centers_points
+    def centers_info(self) -> CentersInfo | None:
+        if self._centers_info is None:
+            return None
+        return self._centers_info
 
     @mesh.setter
     def mesh(self, mesh: Trimesh):
@@ -180,12 +198,14 @@ class SurfacePointsFrame:
     def __repr__(self):
         return f"SurfacePointsFrame(labeled_points_list={self.labeled_points_list}, time={self.time})"
 
-def compute_closest_centers_tensor(points: torch.Tensor, centers_points: torch.Tensor) -> torch.Tensor:
+def find_closest_centers(points: torch.Tensor, centers_points: torch.Tensor, num_closest_centers : int, kdtree : KDTree ) -> torch.Tensor:
     """
 
     :param points:
     :param centers_points:
-    :return: list of ClosestCentersList with index coreesponding to index of points
+    :return:
+     distance_tensor: tensor of distances in a row so the size is "len(points) * num_closest_points"
+     centers_points_tensor: tensor of closest centers points to points in a row so the size is "len(points) * num_closest_points"
     """
     # region SANITY CHECKS
     if points is None:
@@ -200,117 +220,55 @@ def compute_closest_centers_tensor(points: torch.Tensor, centers_points: torch.T
     if centers_points.shape[1] != 3:
         raise AssertionError("Centers points must have 3 coordinates.")
 
+    if kdtree is None:
+        raise AssertionError("KDTree is empty.")
     # endregion
 
-    # start points tensor so i can backpropagate
-    points.requires_grad_(True)
-
     # region LOGIC
-    num_closest_centers = CDataPreprocessing.NUM_CLOSEST_CENTERS_TO_POINT
 
-    # Build a KDTree for the clustered points
-    centers_points_np = centers_points.detach().numpy()
-    kdtree = KDTree(centers_points_np)
+
     # Find num_closest_centers closest centers to each point
     points_np = points.detach().numpy()
-    distances, indices = kdtree.query(points_np, k=num_closest_centers)
+    _, indices = kdtree.query(points_np, k=num_closest_centers)
 
-    # Convert distances to a tensor
-    distances_tensor = torch.tensor(distances, dtype=torch.float32, device=points.device)
-    distances_tensor.requires_grad_(True)
-    # distances_tensor from shape (x,3) to (x)
-    distances_tensor = distances_tensor.view(-1)
+    # select centers points
+    selected_centers_points = centers_points[indices]
+
+    return selected_centers_points
+
+def compute_distances_from_centers(points: torch.Tensor, closest_centers_points: torch.Tensor, num_closest_centers : int ) -> torch.Tensor:
+    # region SANITY CHECKS
+    if points is None:
+        raise AssertionError("Points are empty.")
+    # check if points elements shape is (x,y,z) and it is float numbers
+    if points.shape[1] != 3:
+        raise AssertionError("Points must have 3 coordinates.")
+
+    if closest_centers_points is None:
+        raise AssertionError("Centers points are empty.")
+    # check if centers_points elements shape is (x,y,z) and it is float numbers
+    if closest_centers_points.shape[1] != num_closest_centers:
+        raise AssertionError("Centers points must specified closest centers.")
+    if closest_centers_points.shape[2] != 3:
+        raise AssertionError("Centers points must have 3 coordinates.")
+
+    if closest_centers_points.shape[0] != points.shape[0]:
+        raise AssertionError("Centers points must have the same number of points")
+
+    # num_closest_centers
+    if num_closest_centers is None:
+        raise AssertionError("Number of closest centers is empty.")
+    if num_closest_centers < 1:
+        raise AssertionError("Number of closest centers must be greater than 0.")
+    # endregion
+
+
+    # compute distances
+    points_in_row = points.unsqueeze(1).repeat(1, num_closest_centers, 1).view(-1, 3)
+    closest_centers_points_in_row = closest_centers_points.view(-1, 3)
+    distances_tensor = torch.norm(points_in_row - closest_centers_points_in_row, dim=1)
 
     return distances_tensor
-
-def compute_closest_centers(points: torch.Tensor, centers_points: np.array) -> list:
-    """
-
-    :param points:
-    :param centers_points:
-    :return: list of ClosestCentersList with index coreesponding to index of points
-    """
-    # region SANITY CHECKS
-    if points is None:
-        raise AssertionError("Points are empty.")
-    # check if points elements shape is (x,y,z) and it is float numbers
-    if points.shape[1] != 3:
-        raise AssertionError("Points must have 3 coordinates.")
-
-    if centers_points is None:
-        raise AssertionError("Centers points are empty.")
-    # check if centers_points elements shape is (x,y,z) and it is float numbers
-    if centers_points.shape[1] != 3:
-        raise AssertionError("Centers points must have 3 coordinates.")
-    # endregion
-
-    # region LOGIC
-    num_closest_centers = CDataPreprocessing.NUM_CLOSEST_CENTERS_TO_POINT
-
-    # Build a KDTree for the clustered points
-    kdtree = KDTree(centers_points)
-    # Find num_closest_centers closest centers to each point
-
-    points_np = points.detach().numpy()
-    distances, indices = kdtree.query(points_np, k=num_closest_centers)
-
-    points_closest_centers = []
-    for i, point in enumerate(points):
-        closest_centers = ClosestCentersList([])
-        closest_centers_indices = indices[i]
-        closest_centers_distances = distances[i]
-        for j in range(num_closest_centers):
-            index = closest_centers_indices[j]
-            # index to int
-            index = int(index)
-
-            distance = closest_centers_distances[j]
-            # distance to float
-            distance = float(distance)
-            center_point = centers_points[index]
-            closest_centers.append(CenterPoint(index,center_point, distance))
-        points_closest_centers.append(closest_centers)
-    # endregion
-
-    return points_closest_centers
-
-def compute_distances_to_original_points_centers(points: torch.Tensor, original_points_centers: list) -> np.array:
-    """
-
-    :param points:
-    :return: list of ClosestCentersList with index coreesponding to index of points
-    """
-    # region SANITY CHECKS
-    if points is None:
-        raise AssertionError("Points are empty.")
-    # check if points elements shape is (x,y,z) and it is float numbers
-    if points.shape[1] != 3:
-        raise AssertionError("Points must have 3 coordinates.")
-    # endregion
-
-    # region LOGIC
-    num_closest_centers = CDataPreprocessing.NUM_CLOSEST_CENTERS_TO_POINT
-
-    # Assuming original_points_centers is a list of ClosestCentersList
-    original_points_centers_points = []
-    for closest_centers_list in original_points_centers:
-        original_points_centers_points.extend([center_point.point for center_point in closest_centers_list])
-    original_points_centers_points = torch.tensor(original_points_centers_points)
-    original_points_centers_points.requires_grad_(True)
-    """ list of center cordinates in a row - one point has num_closest_centers rows """
-
-    points_duplicated = torch.repeat_interleave(points, num_closest_centers, dim=0)
-    points_duplicated.requires_grad_(True)
-    """ duplicate points to match the shape of original_points_centers_points_np """
-
-    if points_duplicated.shape != original_points_centers_points.shape:
-        raise ValueError("Shapes of points and original_points_centers_points_np do not match.")
-
-    distances = torch.norm(points_duplicated - original_points_centers_points, dim=1)
-    distances.requires_grad_(True)
-
-    return distances
-
 
 
 
@@ -531,9 +489,9 @@ class SurfacePointsFrameList:
             filtered_labels = labels_array[matching_indices]
 
             # Create a new SurfaceData instance with the filtered points and labels
-            points_frame = SurfacePointsFrame(surface_points=filtered_points, surface_labels=filtered_labels,
+            points_frame = SurfacePointsFrame.duplicate_instances(surface_points=filtered_points, surface_labels=filtered_labels,
                                               time=surface_data.time, mesh=surface_data.mesh,
-                                              centers_points=surface_data.centers_points)
+                                              centers_info=surface_data.centers_info)
             filtered_data.append(points_frame)
 
 
@@ -610,7 +568,7 @@ class CenterPoint:
     Data class for saving distance to specifed point
     """
 
-    def __init__(self, center_point_index: int, point : ndarray, distance: float):
+    def __init__(self, center_point_index: int, point : ndarray, distance: float | None):
         # region SANITY CHECK
         if center_point_index is None:
             raise AssertionError("Point index is empty.")
@@ -622,10 +580,10 @@ class CenterPoint:
         if len(point) != 3:
             raise ValueError("Point must have 3 coordinates.")
 
-        if distance is None:
-            raise AssertionError("Distance is empty.")
-        if distance < 0:
-            raise AssertionError("Distance must be greater than 0.")
+        if distance is not None:
+            if distance < 0:
+                raise AssertionError("Distance must be greater than 0.")
+
         # endregion
 
         self.point_index: int = center_point_index
