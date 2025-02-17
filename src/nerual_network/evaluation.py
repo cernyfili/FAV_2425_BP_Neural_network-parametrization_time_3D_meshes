@@ -226,7 +226,10 @@ def _prepare_export_data(surface_data_list, train_config: TrainConfig):
     processed_points_all = []
     cluster_labels = []
     unique_clusters = surface_data_list.get_unique_clusters()
-    for cluster in unique_clusters:
+    for i, cluster in enumerate(unique_clusters):
+        if i >= train_config.num_clusters:
+            break
+
         # Load the original surface points for the current cluster
         surface_data_cluster = surface_data_list.filter_by_label(cluster)
 
@@ -360,12 +363,15 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: Su
     original_points_all = []
     processed_points_all = []
     cluster_labels = []
+
     unique_clusters = surface_data_list.get_unique_clusters()
 
     # select original points where time is 0
     original_points_frame = surface_data_list.get_element_by_time_index(time)
 
-    for cluster in unique_clusters:
+    for i, cluster in enumerate(unique_clusters):
+        if i >= train_config.num_clusters:
+            break
         # Load the original surface points for the current cluster
         surface_data_cluster_timeframe = original_points_frame.filter_by_label(cluster)
 
@@ -845,13 +851,13 @@ def evaluate(train_config: TrainConfig):
     # endregion
 
     # region Visulize
-    _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-                               images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_0"), time=0,
-                               train_config=train_config)
+    # _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+    #                            images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_0"), time=0,
+    #                            train_config=train_config)
 
-    _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-                               images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_59"),
-                               time=59, train_config=train_config)
+    # _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+    #                            images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_59"),
+    #                            time=59, train_config=train_config)
 
     original_points_all, processed_points_all, cluster_labels = _prepare_export_data(
         surface_data_list=surface_data_list, train_config=train_config)

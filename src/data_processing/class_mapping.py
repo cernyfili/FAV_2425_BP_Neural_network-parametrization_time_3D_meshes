@@ -228,7 +228,7 @@ def find_closest_centers(points: torch.Tensor, centers_points: torch.Tensor, num
 
 
     # Find num_closest_centers closest centers to each point
-    points_np = points.detach().numpy()
+    points_np = points.cpu().detach().numpy()
     _, indices = kdtree.query(points_np, k=num_closest_centers)
 
     # select centers points

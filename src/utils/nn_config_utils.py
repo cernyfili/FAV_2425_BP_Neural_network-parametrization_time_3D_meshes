@@ -13,7 +13,6 @@ import igl
 import numpy as np
 import torch
 import trimesh
-from attr import dataclass
 from numpy import ndarray
 from scipy.spatial import KDTree
 from torch import optim, nn, tensor
