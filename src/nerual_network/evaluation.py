@@ -17,7 +17,7 @@ from nerual_network.class_evaluation import PairPointCenterPoint, PairPointCente
 from src.nerual_network.class_model import NNDataset
 from utils.constants import NN_DEVICE_STR, TrainConfig
 from utils.helpers import load_pickle_file
-from utils.nn_config_utils import init_training_config, prepare_decoder_input_data, get_loaded_meshes_list, prepare_encoder_input_data
+from utils.nn_config_utils import init_training_config, _add_time_column, get_loaded_meshes_list
 
 
 # Restrict access to underscore-prefixed functions
@@ -252,9 +252,9 @@ def _prepare_export_data(surface_data_list, train_config: TrainConfig):
             for batch in original_points_loader:
                 inputs = batch[0]  # Get only the points with time
                 inputs = inputs.float().to(device)
-                inputs = prepare_encoder_input_data(inputs)
+                encoder_inputs = NNDataset.get_encoder_input(inputs)
 
-                outputs = model(inputs)  # Forward pass through the model
+                outputs = model(encoder_inputs)  # Forward pass through the model
                 processed_points.append(outputs)
 
         # Convert processed points to a single numpy array
@@ -394,7 +394,7 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: Su
         with torch.no_grad():  # No need to calculate gradients during evaluation
             for inputs in original_points_loader:
                 inputs = inputs[0].float().to(device)
-                encoder_input_data = prepare_encoder_input_data(inputs)
+                encoder_input_data = NNDataset.get_encoder_input(inputs)
                 encoded_features_element = model.encoder(encoder_input_data)
                 encoded_features.append(encoded_features_element)
 
@@ -406,7 +406,7 @@ def run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: Su
                 raise Exception("Not same time")
 
             time_value = surface_points_frame.time.value
-            encoded_with_time = prepare_decoder_input_data(device, encoded_features, time_value)
+            encoded_with_time = _add_time_column(encoded_features, time_value)
 
             # Pass through the decoder
             decoded_output = model.decoder(encoded_with_time)

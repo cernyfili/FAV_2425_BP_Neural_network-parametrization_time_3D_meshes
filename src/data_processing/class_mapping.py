@@ -11,6 +11,146 @@ from trimesh import Trimesh
 from utils.constants import CDataPreprocessing
 
 
+# region CLASES - Centers info
+class CenterPoint:
+    """
+    Data class for saving distance to specifed point
+    """
+
+    def __init__(self, center_point_index: int, point : ndarray, distance: float | None):
+        # region SANITY CHECK
+        if center_point_index is None:
+            raise AssertionError("Point index is empty.")
+        if center_point_index < 0:
+            raise AssertionError("Point index must be greater than 0.")
+
+        if point is None:
+            raise AssertionError("Point is empty.")
+        if len(point) != 3:
+            raise ValueError("Point must have 3 coordinates.")
+
+        if distance is not None:
+            if distance < 0:
+                raise AssertionError("Distance must be greater than 0.")
+
+        # endregion
+
+        self.point_index: int = center_point_index
+        self.distance: float = distance
+        self.point: ndarray = point
+
+
+class ClosestCentersList(list):
+    """
+    Data class for saving distance to specifed point
+    """
+
+    _ELEMENT_DATA_TYPE = CenterPoint
+
+    def __init__(self, elements):
+        if not all(isinstance(element, self._ELEMENT_DATA_TYPE) for element in elements):
+            raise ValueError("All elements must be integers")
+        super().__init__(elements)
+
+    def append(self, __object):
+        if not isinstance(__object, self._ELEMENT_DATA_TYPE):
+            raise ValueError("Object must be an instance of CenterPoint.")
+        super().append(__object)
+
+    def get_centers_indices(self):
+        return [element.point_index for element in self]
+
+
+class LabeledPoint:
+    """
+    Class to represents point in object for one cluster and for a single time step.
+    """
+
+    def __init__(self, point: list, label: int = None, closest_centers: ClosestCentersList = None):
+        if len(point) != 3:
+            raise ValueError("Point must have 3 coordinates.")
+
+        self.point = point
+        self.label = label
+        self.closest_centers : ClosestCentersList = closest_centers
+
+    def __repr__(self):
+        return f"LabeledPoint(point={self.point}, label={self.label})"
+
+
+class LabeledPointsList:
+    """
+    Class to represents points in object for one cluster and for a single time step.
+    """
+
+    def __init__(self, labeled_points_list: list):
+        self.list = labeled_points_list
+
+    def append(self, labeled_point):
+        """
+        Append a LabeledPoint object to the list.
+        """
+        if not isinstance(labeled_point, LabeledPoint):
+            raise TypeError("labeled_point must be an instance of LabeledPoint")
+        self.list.append(labeled_point)
+
+    def filter_by_label(self, label_index):
+        """
+        Filter the LabeledPointsList by the given label index, keeping only the corresponding points.
+
+        Parameters:
+        - label_index: int, the label index to filter by
+
+        Returns:
+        - LabeledPointsList instance containing only the LabeledPoint objects with the specified label index
+        """
+        filtered_data = []
+
+        for labeled_point in self.list:
+            if labeled_point.label == label_index:
+                filtered_data.append(labeled_point)
+
+        return LabeledPointsList(filtered_data)
+
+    def filter_by_points_indices(self, points_indices):
+        """
+        Filter the LabeledPointsList by the given points indices, keeping only the corresponding points.
+
+        Parameters:
+        - points_indices: list, the points indices to filter by
+
+        Returns:
+        - LabeledPointsList instance containing only the LabeledPoint objects with the specified points indices
+        """
+        filtered_data = []
+
+        for point_index in points_indices:
+            filtered_data.append(self.list[point_index])
+
+        return LabeledPointsList(filtered_data)
+
+    def get_points(self):
+        """
+        Return the list of points.
+        """
+        return [labeled_point.point for labeled_point in self.list]
+
+    def get_labels(self):
+        """
+        Return the list of labels.
+        """
+        return [labeled_point.label for labeled_point in self.list]
+
+    def get_closest_centers(self) -> list[ClosestCentersList]:
+        """
+        Return the list of closest centers.
+        """
+        return [labeled_point.closest_centers for labeled_point in self.list]
+
+    def __repr__(self):
+        return f"LabeledPointsList(list={self.list})"
+# endregion
+
 @dataclass
 class NormalizedSetttings:
     is_normalized: bool
@@ -68,50 +208,103 @@ class SurfacePointsFrame:
     Class to represents points in object for one cluster and for a single time step.
     """
 
-    def __init__(self, surface_points, surface_labels, time: TimeFrame | None, mesh: Trimesh,
-                 centers_points: np.array, center_info : CentersInfo = None):
+    def __init__(self, surface_points : np.ndarray, surface_labels : np.ndarray, time: TimeFrame | None, mesh: Trimesh,
+                 centers_points: np.ndarray, center_info : CentersInfo = None):
         """
-        :param surface_points:
-        :param surface_labels:
+        :param surface_points: np.array of shape (num_points_in_file, 3) (x,y,z)
+        :param surface_labels: np.array of shape (num_points_in_file, 1) (label)
         :param time:
         :param mesh:
         :param centers_points: np.array of shape (num_points_in_file, 3) (x,y,z)
         """
 
+        # region SANITY CHECK
         if surface_labels is not None and len(surface_labels) != len(surface_points):
             raise ValueError("Number of labels must match the number of points.")
 
-        closest_centers_to_points = None
-        # if centers_points is not None:
-        #     closest_centers_to_points = compute_closest_centers(surface_points, centers_points)
+        # check surface_points
+        if surface_points is None:
+            raise AssertionError("Surface points are empty.")
+        if surface_points.shape[1] != 3:
+            raise AssertionError("Surface points must have 3 coordinates.")
+        # check if it is float numbers inside
+        if not np.issubdtype(surface_points.dtype, np.floating):
+            raise AssertionError("Surface points must be float numbers.")
 
-        # region Compute closest centers
+        # check surface_labels
+        if surface_labels is not None:
+            if not np.issubdtype(surface_labels.dtype, np.integer):
+                raise AssertionError("Surface labels must be integers.")
+            if len(surface_labels) != len(surface_points):
+                raise AssertionError("Number of labels must match the number of points.")
+
 
         # endregion
 
-        self.labeled_points_list = LabeledPointsList([])
-        len_labeled_points_list = len(surface_points)
-        for i in range(len_labeled_points_list):
-            labeled_point = LabeledPoint(surface_points[i])
-            if surface_labels is not None:
-                labeled_point.label = surface_labels[i]
-            if closest_centers_to_points is not None:
-                labeled_point.closest_centers = closest_centers_to_points[i]
-            self.labeled_points_list.append(labeled_point)
 
-        self.time = time
-        self._mesh: Trimesh = mesh
 
+        # region self._centers_info
         self._centers_info: CentersInfo | None = None
-
         if center_info is not None:
             self._centers_info = center_info
         elif centers_points is not None:
             kd_tree : KDTree = KDTree(centers_points)
             self._centers_info = CentersInfo(points=centers_points, kd_tree=kd_tree)
+        # endregion
+
+        # region self_labeled_points_list
+
+        # compute closest centers to points
+        closest_centers_to_points = None
+        if self._centers_info is not None:
+            closest_centers_to_points = SurfacePointsFrame.compute_closest_centers(points=surface_points, centers_info=self._centers_info)
+
+        labeled_points_list : LabeledPointsList = LabeledPointsList([])
+        len_labeled_points_list = len(surface_points)
+        for i in range(len_labeled_points_list):
+            points = surface_points[i].tolist()
+            label = None
+            closest_centers = None
+            if surface_labels is not None:
+                label = surface_labels[i]
+            if closest_centers_to_points is not None:
+                closest_centers = closest_centers_to_points[i]
+
+            labeled_point = LabeledPoint(points, label, closest_centers)
+            labeled_points_list.append(labeled_point)
+
+        self._labeled_points_list = labeled_points_list
+        # endregion
+
+        self.time = time
+        self._mesh: Trimesh = mesh
+
+    @staticmethod
+    def compute_closest_centers(points : np.ndarray, centers_info: CentersInfo) -> list[ClosestCentersList]:
+        """
+        Compute the closest centers to each point in the surface points list.
+        """
+        num_closest_centers = CDataPreprocessing.NUM_CLOSEST_CENTERS_TO_POINT
+
+        # Find num_closest_centers closest centers to each point
+        distances, indices = centers_info.kd_tree.query(points, k=num_closest_centers)
+
+        # create list of closest centers
+        all_closest_centers_list : list[ClosestCentersList] = []
+        for i in range(len(points)):
+            points_closest_centers = ClosestCentersList([])
+            for j in range(num_closest_centers):
+                center_point_index = int(indices[i][j])
+                distance = float(distances[i][j])
+                center_point = CenterPoint(center_point_index=center_point_index, point=centers_info.points[center_point_index], distance=distance)
+                points_closest_centers.append(center_point)
+            all_closest_centers_list.append(points_closest_centers)
+        return all_closest_centers_list
+
+
 
     @classmethod
-    def create_instance(cls, surface_points, surface_labels, time: TimeFrame, mesh: Trimesh, centers_points: np.array):
+    def create_instance(cls, surface_points : np.ndarray, surface_labels : np.ndarray, time: TimeFrame, mesh: Trimesh, centers_points: np.ndarray):
         return cls(surface_points, surface_labels, time, mesh, centers_points)
 
     @classmethod
@@ -119,10 +312,10 @@ class SurfacePointsFrame:
         return cls(surface_points, surface_labels, time, mesh, None, centers_info)
 
     def slice_arrays(self, id):
-        if id >= len(self.labeled_points_list.list):
+        if id >= len(self._labeled_points_list.list):
             raise ValueError("Index out of range.")
 
-        self.labeled_points_list = LabeledPointsList(self.labeled_points_list.list[id:])
+        self._labeled_points_list = LabeledPointsList(self._labeled_points_list.list[id:])
         return self
 
     # set time value
@@ -140,7 +333,7 @@ class SurfacePointsFrame:
         Returns:
         - SurfaceData instance containing only the points with the specified label index
         """
-        filtered_data = self.labeled_points_list.filter_by_label(label_index)
+        filtered_data = self._labeled_points_list.filter_by_label(label_index)
         # return SurfacePointsFrame(filtered_data.get_points(), filtered_data.get_labels(), self.time)
         points_frame = SurfacePointsFrame.duplicate_instances(surface_points=filtered_data.get_points(),
                                           surface_labels=filtered_data.get_labels(), time=self.time,
@@ -149,12 +342,17 @@ class SurfacePointsFrame:
 
     @property
     def points_list(self):
-        return self.labeled_points_list.get_points()
+        return self._labeled_points_list.get_points()
+
+
+    @property
+    def labeled_points_list(self) -> LabeledPointsList:
+        return self._labeled_points_list
 
     @property
     def closest_centers_list(self):
         closest_centers_list = []
-        for labeled_point in self.labeled_points_list.list:
+        for labeled_point in self._labeled_points_list.list:
             closest_centers_list.append(labeled_point.closest_centers)
         return closest_centers_list
 
@@ -162,19 +360,19 @@ class SurfacePointsFrame:
     @points_list.setter
     def points_list(self, points_list):
         len_labeled_points_list = len(points_list)
-        surface_labels = self.labeled_points_list.get_labels()
-        self.labeled_points_list = LabeledPointsList([])
+        surface_labels = self._labeled_points_list.get_labels()
+        self._labeled_points_list = LabeledPointsList([])
 
         for i in range(len_labeled_points_list):
             if surface_labels is None or not surface_labels:
-                self.labeled_points_list.append(LabeledPoint(points_list[i]))
+                self._labeled_points_list.append(LabeledPoint(points_list[i]))
             else:
-                self.labeled_points_list.append(LabeledPoint(points_list[i], surface_labels[i]))
+                self._labeled_points_list.append(LabeledPoint(points_list[i], surface_labels[i]))
         # return self.points_list
 
     @property
     def labels_list(self):
-        return self.labeled_points_list.get_labels()
+        return self._labeled_points_list.get_labels()
 
     @property
     def mesh(self):
@@ -196,7 +394,7 @@ class SurfacePointsFrame:
 
     # function which represents object in debug value view
     def __repr__(self):
-        return f"SurfacePointsFrame(labeled_points_list={self.labeled_points_list}, time={self.time})"
+        return f"SurfacePointsFrame(labeled_points_list={self._labeled_points_list}, time={self.time})"
 
 def find_closest_centers(points: torch.Tensor, centers_points: torch.Tensor, num_closest_centers : int, kdtree : KDTree ) -> torch.Tensor:
     """
@@ -368,7 +566,7 @@ class SurfacePointsFrameList:
 
         return {surface_data.time.value for surface_data in self.list}
 
-    def get_element_by_time_index(self, time_index) -> SurfacePointsFrame:
+    def get_element_by_time_index(self, time_index : int) -> SurfacePointsFrame:
         """
         Find the element in the list with the specified time index.
         """
@@ -562,118 +760,3 @@ def time_frame_list_find_closest_element_index(time_frame_list: List[TimeFrame],
 
     raise ValueError("Index not found")
 
-
-class CenterPoint:
-    """
-    Data class for saving distance to specifed point
-    """
-
-    def __init__(self, center_point_index: int, point : ndarray, distance: float | None):
-        # region SANITY CHECK
-        if center_point_index is None:
-            raise AssertionError("Point index is empty.")
-        if center_point_index < 0:
-            raise AssertionError("Point index must be greater than 0.")
-
-        if point is None:
-            raise AssertionError("Point is empty.")
-        if len(point) != 3:
-            raise ValueError("Point must have 3 coordinates.")
-
-        if distance is not None:
-            if distance < 0:
-                raise AssertionError("Distance must be greater than 0.")
-
-        # endregion
-
-        self.point_index: int = center_point_index
-        self.distance: float = distance
-        self.point: ndarray = point
-
-
-class ClosestCentersList(list):
-    """
-    Data class for saving distance to specifed point
-    """
-
-    _ELEMENT_DATA_TYPE = CenterPoint
-
-    def __init__(self, elements):
-        if not all(isinstance(element, self._ELEMENT_DATA_TYPE) for element in elements):
-            raise ValueError("All elements must be integers")
-        super().__init__(elements)
-
-    def append(self, __object):
-        if not isinstance(__object, self._ELEMENT_DATA_TYPE):
-            raise ValueError("Object must be an instance of CenterPoint.")
-        super().append(__object)
-
-
-class LabeledPoint:
-    """
-    Class to represents point in object for one cluster and for a single time step.
-    """
-
-    def __init__(self, point: list, label: int = None, closest_centers: ClosestCentersList = None):
-        if len(point) != 3:
-            raise ValueError("Point must have 3 coordinates.")
-
-        self.point = point
-        self.label = label
-        self.closest_centers = closest_centers
-
-    def __repr__(self):
-        return f"LabeledPoint(point={self.point}, label={self.label})"
-
-
-class LabeledPointsList:
-    """
-    Class to represents points in object for one cluster and for a single time step.
-    """
-
-    def __init__(self, labeled_points_list: list):
-        self.list = labeled_points_list
-
-    def append(self, labeled_point):
-        """
-        Append a LabeledPoint object to the list.
-        """
-        if not isinstance(labeled_point, LabeledPoint):
-            raise TypeError("labeled_point must be an instance of LabeledPoint")
-        self.list.append(labeled_point)
-
-    def filter_by_label(self, label_index):
-        """
-        Filter the LabeledPointsList by the given label index, keeping only the corresponding points.
-
-        Parameters:
-        - label_index: int, the label index to filter by
-
-        Returns:
-        - LabeledPointsList instance containing only the LabeledPoint objects with the specified label index
-        """
-        filtered_data = []
-
-        for labeled_point in self.list:
-            if labeled_point.label == label_index:
-                filtered_data.append(labeled_point)
-
-        return LabeledPointsList(filtered_data)
-
-    def get_points(self):
-        """
-        Return the list of points.
-        """
-        points_list = []
-        for labeled_point in self.list:
-            points_list.append(labeled_point.point)
-        return points_list
-
-    def get_labels(self):
-        """
-        Return the list of labels.
-        """
-        return [labeled_point.label for labeled_point in self.list]
-
-    def __repr__(self):
-        return f"LabeledPointsList(list={self.list})"

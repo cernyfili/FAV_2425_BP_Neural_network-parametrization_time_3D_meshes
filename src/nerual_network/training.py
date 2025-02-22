@@ -143,6 +143,10 @@ def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: 
     train_dataset = Subset(dataset, train_indices)
     val_dataset = Subset(dataset, val_indices)
 
+    # Sort each subset by the time index column
+    train_dataset.indices = sorted(train_dataset.indices)
+    val_dataset.indices = sorted(val_dataset.indices)
+
     # Create data loaders for training and validation
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)

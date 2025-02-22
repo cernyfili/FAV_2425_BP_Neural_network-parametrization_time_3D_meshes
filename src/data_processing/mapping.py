@@ -78,7 +78,7 @@ def __getattr__(name):
 #
 #     return surface_points, surface_labels
 
-def _create_categorized_surface_points(mesh, centers_points_frame, centers_labels_frame, num_surface_points):
+def _create_categorized_surface_points(mesh, centers_points_frame, centers_labels_frame, num_surface_points) -> tuple[np.ndarray, np.ndarray]:
     """
     Categorize random points on the surface of a mesh based on the closest point inside the mesh.
 
@@ -91,7 +91,7 @@ def _create_categorized_surface_points(mesh, centers_points_frame, centers_label
 
     Returns:
     - surface_points: np.ndarray of shape (num_surface_points, 3)
-    - surface_labels: np.ndarray of shape (num_surface_points,)
+    - surface_labels: np.ndarray of shape (num_surface_points, 1)
     :param mesh:
     """
 

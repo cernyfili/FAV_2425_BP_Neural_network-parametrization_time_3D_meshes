@@ -20,15 +20,16 @@ class NNDataset(Dataset):
 
         self.data = []
         for surface_data in surface_data_list.list:
-            points = surface_data.points_list
-            points = np.array(points)
+            points_all = surface_data.points_list
+            points_all = np.array(points_all)
 
-            time = np.full((points.shape[0], 1), surface_data.time.value)
 
-            time_index = np.full((points.shape[0], 1), surface_data.time.index)
+            time_values = np.full((points_all.shape[0], 1), surface_data.time.value)
+            time_index = np.full((points_all.shape[0], 1), surface_data.time.index)
+            point_indices = np.arange(points_all.shape[0]).reshape(-1, 1)
 
-            points_with_time = np.hstack((points, time, time_index))
-            self.data.append(points_with_time)
+            points_with_info = np.hstack((points_all, time_values, time_index, point_indices))
+            self.data.append(points_with_info)
 
         self.data = np.vstack(self.data)  # Shape: [total_points, feature_count]
 
@@ -38,8 +39,43 @@ class NNDataset(Dataset):
     def __getitem__(self, idx):
         # Separate data based on the target and input requirements
         targets = self.data[idx, :3]   # First 3 columns as targets
-        inputs = self.data[idx, :5]    # All 4 columns as inputs, including "time" as the last one
+        inputs = self.data[idx]    # All 4 columns as inputs, including "time" as the last one
         return inputs, targets
+
+    @staticmethod
+    def get_time_indices_column(input_tensor : torch.Tensor) -> torch.Tensor:
+        return input_tensor[:, 4].unsqueeze(1)
+
+    @staticmethod
+    def get_time_values_column(input_tensor : torch.Tensor) -> torch.Tensor:
+        return input_tensor[:, 3].unsqueeze(1)
+
+    @staticmethod
+    def get_point_indices_column(input_tensor : torch.Tensor) -> torch.Tensor:
+        return input_tensor[:, 5].unsqueeze(1)
+
+    @staticmethod
+    def get_encoder_input(input_tensor : torch.Tensor) -> torch.Tensor:
+        return input_tensor[:, :4]
+    
+    @staticmethod
+    def get_points_columns(input_tensor : torch.Tensor) -> torch.Tensor:
+        return input_tensor[:, :3]
+
+    @staticmethod
+    def get_unique_time_indices_list(input_tensor : torch.Tensor) -> torch.Tensor:
+        time_indices = NNDataset.get_time_indices_column(input_tensor)
+        return torch.unique(time_indices)
+
+    @staticmethod
+    def filter_by_time_index(input_tensor : torch.Tensor, time_index : int) -> torch.Tensor:
+        time_indices = NNDataset.get_time_indices_column(input_tensor)
+        # convert time_indices to a int tensor
+        time_indices = time_indices.int()
+        mask = (time_indices == time_index).squeeze()
+
+        return_tensor = input_tensor[mask]
+        return return_tensor
 
 
 class Simple_MLP_01(nn.Module):
