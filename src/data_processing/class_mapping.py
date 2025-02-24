@@ -198,10 +198,12 @@ class TimeFrame:
     def __repr__(self):
         return f"TimeFrame(index={self.index}, value={self.value})"
 
-@dataclass
+
 class CentersInfo:
-    points: ndarray
-    kd_tree: KDTree
+
+    def __init__(self, points: np.ndarray):
+        self.points : ndarray = points
+        self.kd_tree : KDTree = KDTree(points)
 
 class SurfacePointsFrame:
     """
@@ -248,8 +250,7 @@ class SurfacePointsFrame:
         if center_info is not None:
             self._centers_info = center_info
         elif centers_points is not None:
-            kd_tree : KDTree = KDTree(centers_points)
-            self._centers_info = CentersInfo(points=centers_points, kd_tree=kd_tree)
+            self._centers_info = CentersInfo(points=centers_points)
         # endregion
 
         # region self_labeled_points_list
@@ -273,10 +274,10 @@ class SurfacePointsFrame:
             labeled_point = LabeledPoint(points, label, closest_centers)
             labeled_points_list.append(labeled_point)
 
-        self._labeled_points_list = labeled_points_list
+        self._labeled_points_list  : LabeledPointsList = labeled_points_list
         # endregion
 
-        self.time = time
+        self.time : TimeFrame = time
         self._mesh: Trimesh = mesh
 
     @staticmethod
@@ -385,6 +386,34 @@ class SurfacePointsFrame:
         if self._centers_info is None:
             return None
         return self._centers_info
+
+    @centers_info.setter
+    def centers_info(self, center_info: CentersInfo):
+        if center_info is None:
+            raise ValueError("Center info is empty.")
+
+        self._centers_info = center_info
+
+        self._compute_closest_centers_to_points()
+
+
+    def _compute_closest_centers_to_points(self):
+        surface_points = self.points_list
+        surface_points = np.array(surface_points)
+
+        closest_centers_to_points = None
+        if self._centers_info is not None:
+            closest_centers_to_points = SurfacePointsFrame.compute_closest_centers(points=surface_points, centers_info=self._centers_info)
+
+        if self._labeled_points_list is None:
+            raise ValueError("Labeled points list is empty.")
+
+        if len(self._labeled_points_list.list) != len(closest_centers_to_points):
+            raise ValueError("Number of points must match the number of closest centers.")
+
+        # set closest centers to labeled points
+        for i, labeled_point in enumerate(self._labeled_points_list.list):
+            labeled_point.closest_centers = closest_centers_to_points[i]
 
     @mesh.setter
     def mesh(self, mesh: Trimesh):
@@ -542,6 +571,14 @@ class SurfacePointsFrameList:
                 normalized_mesh = __create_normalized_mesh(shift_vector, max_norm, mesh)
                 surface_data.mesh = normalized_mesh
 
+        def __shift_and_scale_centers(shift_vector, max_norm):
+            for surface_data in self.list:
+                surface_data : SurfacePointsFrame = surface_data
+                # normalize centers
+                points = surface_data.centers_info.points
+                normalized_centers = (points - shift_vector) / max_norm
+                surface_data.centers_info = CentersInfo(points=normalized_centers)
+
         # Normalize time for each object
         __normalize_time(self)
 
@@ -550,6 +587,8 @@ class SurfacePointsFrameList:
 
         # Shift points to origin and scale
         __shift_and_scale_points(shift_vector, max_norm)
+
+        __shift_and_scale_centers(shift_vector, max_norm)
 
         self._normalized_settings = NormalizedSetttings(True, shift_vector, max_norm)
 
