@@ -28,10 +28,11 @@ from utils.helpers import get_meshes_list
 def _add_time_column(encoded_features, time_value):
     device = encoded_features.device
     # Create a tensor of the same shape as the time feature in the input
-    time_tensor = torch.full((encoded_features.size(0), 1), time_value, dtype=torch.float32)
+    time_tensor = torch.full((encoded_features.size(0), 1), time_value, dtype=torch.float32).to(device)
     # Concatenate the encoded features with the time tensor
-    encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1).to(device)
+    encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1)
     return encoded_with_time
+
 
 
 def get_loaded_meshes_list(meshes_folder_path: str):

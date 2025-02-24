@@ -335,11 +335,14 @@ class SurfacePointsFrame:
         - SurfaceData instance containing only the points with the specified label index
         """
         filtered_data = self._labeled_points_list.filter_by_label(label_index)
-        # return SurfacePointsFrame(filtered_data.get_points(), filtered_data.get_labels(), self.time)
-        points_frame = SurfacePointsFrame.duplicate_instances(surface_points=filtered_data.get_points(),
-                                          surface_labels=filtered_data.get_labels(), time=self.time,
-                                          mesh=self.mesh, centers_info=self.centers_info)
+        points_np = np.array(filtered_data.get_points())
+        labels_np = np.array(filtered_data.get_labels())
+
+        points_frame = SurfacePointsFrame.duplicate_instances(surface_points=points_np,
+                                                              surface_labels=labels_np, time=self.time,
+                                                              mesh=self.mesh, centers_info=self.centers_info)
         return points_frame
+
 
     @property
     def points_list(self):
