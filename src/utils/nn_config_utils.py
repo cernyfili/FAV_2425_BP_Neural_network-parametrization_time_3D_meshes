@@ -520,9 +520,9 @@ def _compute_loss_function_centers(inputs, targets, model, loss_info) -> list:
 
 def _loss_function_centers(inputs, targets, model, loss_info):
     loss_centers_list = _compute_loss_function_centers(inputs, targets, model, loss_info)
-    loss_centers = torch.stack(loss_centers_list).sum()
+    loss_centers = torch.stack(loss_centers_list).mean()
     batch_size = inputs.size(0)
-    loss_centers = loss_centers / batch_size
+    loss_centers = loss_centers
 
     loss_standard = _loss_function_standard(inputs, targets, model, loss_info)
 
