@@ -22,8 +22,8 @@ def main():
 
     # data_folders = ["ball", "casual_man_1000", "casual_man_4000", "vr_take"]
 
-    #data_folders = ["ball", "casual_man_1000"]
-    data_folders = ["casual_man_1000",  "vr_take", "casual_man_4000"]
+    data_folders = ["ball"]
+    #data_folders = ["casual_man_1000",  "vr_take", "casual_man_4000"]
 
     if TEST_MODE:
         data_folders = ["ball_test"]

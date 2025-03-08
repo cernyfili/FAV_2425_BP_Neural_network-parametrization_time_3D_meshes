@@ -2,7 +2,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 
-TEST_MODE = True
+TEST_MODE = False
 
 # Restrict access to only uppercase constants
 def __getattr__(name):
@@ -16,7 +16,7 @@ def __getattr__(name):
 # region Neural network constants
 nn_max_epochs = 10_000
 nn_patience = 5
-nn_batch_size = 32
+nn_batch_size = 128
 nn_lr = 1e-4
 
 loss_function_name : str = "standard"
@@ -37,7 +37,7 @@ LOSS_FUNC_NORMAL_DIST_STD = 1.0
 class CDataPreprocessing:
     NUM_CLOSEST_CENTERS_TO_POINT = 3
     NUM_CLUSTERS = 5
-    NUM_SURFACE_POINTS = 10_000
+    NUM_SURFACE_POINTS = 20_000
     MAX_TIME_STEPS = 100
     RAW_DATA_ALLOWED_FILETYPES_LIST = ['xyz', 'bin']
 

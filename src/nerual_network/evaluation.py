@@ -851,27 +851,29 @@ def evaluate(train_config: TrainConfig):
     # endregion
 
     # region Visulize
+
+
+    # original_points_all, processed_points_all, cluster_labels = _prepare_export_data(
+    #     surface_data_list=surface_data_list, train_config=train_config)
+    #
+    # _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
+    #                                                  os.path.join(images_save_folderpath,
+    #                                                               "time_combined_original_processed"), cluster_labels)
+    # _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(images_save_folderpath, "time_clusters"))
+    #
+    # _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
+    # # Save the combined image
+    # _visualize_original_and_processed_points(original_points_all, processed_points_all, images_save_folderpath)
+    #
+    # _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
+    #                          point_cloud_processed_filepath)
+    #
     # _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
     #                            images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_0"), time=0,
     #                            train_config=train_config)
 
-    # _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-    #                            images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_59"),
-    #                            time=59, train_config=train_config)
-
-    original_points_all, processed_points_all, cluster_labels = _prepare_export_data(
-        surface_data_list=surface_data_list, train_config=train_config)
-
-    _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
-                                                     os.path.join(images_save_folderpath,
-                                                                  "time_combined_original_processed"), cluster_labels)
-    _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(images_save_folderpath, "time_clusters"))
-
-    _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
-    # Save the combined image
-    _visualize_original_and_processed_points(original_points_all, processed_points_all, images_save_folderpath)
-
-    _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
-                             point_cloud_processed_filepath)
+    _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+                               images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_59"),
+                               time=59, train_config=train_config)
 
     # endregion

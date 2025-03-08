@@ -67,6 +67,7 @@ def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2, verbose=True)
 
     best_val_loss = float('inf')
+    best_train_loss = float('inf')
     epochs_no_improve = 0
     best_epoch = 0
     best_checkpoint = None
@@ -86,6 +87,7 @@ def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_
         # Check for early stopping
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            best_train_loss = train_loss
             best_epoch = epoch
             epochs_no_improve = 0
             best_checkpoint = _save_checkpoint(model, optimizer, epoch, best_val_loss)
@@ -95,7 +97,7 @@ def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_
 
         if epochs_no_improve >= patience:
             logging.info(
-                f"Early stopping after {epoch} epochs (Best epoch: {best_epoch} with val loss {best_val_loss:.4f})")
+                f"Early stopping after {epoch} epochs (Best epoch: {best_epoch} with train loss: {best_train_loss:.10f}, val loss: {best_val_loss:.10f})")
             break
 
     torch.save(best_checkpoint, model_save_path)
@@ -130,14 +132,58 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, train_
 
         logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
 
-
+#
+# # Function to split data and create data loaders
+# def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
+#     # Create an instance of SurfaceDataset using the provided surface_data_list
+#     dataset = NNDataset(surface_data_list)
+#
+#     # Split indices for training and validation
+#     train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+#
+#     # Create subsets for training and validation
+#     train_dataset = Subset(dataset, train_indices)
+#     val_dataset = Subset(dataset, val_indices)
+#
+#     # Create data loaders for training and validation
+#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+#
+#     return train_loader, val_loader
 # Function to split data and create data loaders
+# def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
+#     # Create an instance of SurfaceDataset using the provided surface_data_list
+#     dataset = NNDataset(surface_data_list)
+#
+#     # Split indices for training and validation
+#     train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+#
+#     # Create subsets for training and validation
+#     train_dataset = Subset(dataset, train_indices)
+#     val_dataset = Subset(dataset, val_indices)
+#
+#     # Sort each subset by the time index column
+#     # train_dataset.indices = sorted(train_dataset.indices)
+#     # val_dataset.indices = sorted(val_dataset.indices)
+#
+#     # Create data loaders for training and validation
+#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+#
+#     return train_loader, val_loader
+
+
+
+
+
 def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
     # Create an instance of SurfaceDataset using the provided surface_data_list
     dataset = NNDataset(surface_data_list)
 
     # Split indices for training and validation
-    train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+    split_idx = int(0.8 * len(dataset))
+    train_indices = list(range(split_idx))  # First 80%
+    val_indices = list(range(split_idx, len(dataset)))  # Last 20%
 
     # Create subsets for training and validation
     train_dataset = Subset(dataset, train_indices)

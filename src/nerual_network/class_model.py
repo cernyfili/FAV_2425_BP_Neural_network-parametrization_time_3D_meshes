@@ -226,3 +226,64 @@ class Simple_MLP_03(nn.Module):
 
         return decoded_output
 
+class Simple_MLP_04(nn.Module):
+    """
+    Changes:
+    - simplier architecture to reduce overfitting
+    """
+    def __init__(self):
+        super(Simple_MLP_04, self).__init__()
+
+        # Updated encoder with an extra layer, max neurons is 512
+        self.encoder = nn.Sequential(
+            nn.Linear(4, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),  # Added layer with 64 neurons
+            nn.ReLU(),
+            nn.Linear(128, 2)
+        )
+
+        # Updated decoder with an extra layer, max neurons is 512
+        self.decoder = nn.Sequential(
+            nn.Linear(3, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, 128),  # Added layer with 64 neurons
+            nn.ReLU(),
+            nn.Linear(128, 3)
+        )
+
+    def forward(self, x, time_value: int = None):
+        """
+        Forward pass for the model.
+
+        Args:
+            x (torch.Tensor): Input tensor.
+            time_value (torch.Tensor, optional): Custom time value as a column vector.
+                                                 If None, it will be extracted from `x`.
+
+        Returns:
+            torch.Tensor: Decoded output.
+        """
+        time = x[:, 3].unsqueeze(1)
+        if time_value is not None:
+            # change all the time_value so all elements have the value of time_value
+            time = torch.full_like(time, time_value)
+
+        # Encode the input features
+        encoded_features = self.encoder(x)
+
+        # Concatenate the encoded features with the time value
+        encoded_with_time = torch.cat((encoded_features, time), dim=1)
+
+        # Decode the combined encoded features and time
+        decoded_output = self.decoder(encoded_with_time)
+
+        return decoded_output
