@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, TypeAlias
 
 import numpy as np
 import torch
@@ -279,6 +279,9 @@ class SurfacePointsFrame:
 
         self.time : TimeFrame = time
         self._mesh: Trimesh = mesh
+        self._original_mesh = None
+        if mesh is not None:
+            self.original_mesh = mesh
 
     @staticmethod
     def compute_closest_centers(points : np.ndarray, centers_info: CentersInfo) -> list[ClosestCentersList]:
@@ -384,6 +387,26 @@ class SurfacePointsFrame:
             raise ValueError("Mesh is not loaded.")
         return self._mesh
 
+    @mesh.setter
+    def mesh(self, mesh: Trimesh):
+        if not mesh:
+            raise ValueError("Mesh is empty.")
+        self._mesh = mesh
+
+    @property
+    def original_mesh(self):
+        if self._original_mesh is None:
+            raise ValueError("Mesh is not loaded.")
+        return self._original_mesh
+
+    @original_mesh.setter
+    def original_mesh(self, mesh: Trimesh):
+        if mesh is None:
+            raise ValueError("Mesh is empty.")
+        if self._original_mesh is not None:
+            raise ValueError("Original mesh is already set.")
+        self._original_mesh = mesh
+
     @property
     def centers_info(self) -> CentersInfo | None:
         if self._centers_info is None:
@@ -418,11 +441,6 @@ class SurfacePointsFrame:
         for i, labeled_point in enumerate(self._labeled_points_list.list):
             labeled_point.closest_centers = closest_centers_to_points[i]
 
-    @mesh.setter
-    def mesh(self, mesh: Trimesh):
-        if not mesh:
-            raise ValueError("Mesh is empty.")
-        self._mesh = mesh
 
     # function which represents object in debug value view
     def __repr__(self):
@@ -500,9 +518,10 @@ def compute_distances_from_centers(points: torch.Tensor, closest_centers_points:
 
     return distances_tensor
 
-
-
-
+@dataclass
+class NormalizeValues:
+    shift_vector: np.ndarray
+    max_norm: float
 
 class SurfacePointsFrameList:
     def __init__(self, surface_data_list: list):
@@ -511,8 +530,6 @@ class SurfacePointsFrameList:
                 isinstance(item, SurfacePointsFrame) for item in surface_data_list):
             raise TypeError("All items in surface_data_list must be instances of SurfaceData")
         self.list = surface_data_list
-        # Initialize unique_clusters at creation
-        self.max_time_index = None
 
     def assign_time_to_all_elements(self):
         """Assign a time index to each surface data item if not already assigned."""
@@ -533,6 +550,29 @@ class SurfacePointsFrameList:
             all_points.extend(points_list)
         return all_points
 
+    @staticmethod
+    def denormalize_points(normalize_values : NormalizeValues, points: ndarray) -> ndarray:
+        denormalized_points = []
+        for point in points:
+            denormalized_point = (point * normalize_values.max_norm) + normalize_values.shift_vector
+            denormalized_points.append(denormalized_point)
+        #convert to numpy array
+        return np.array(denormalized_points)
+
+    def normalize_labeled_points_by_values(self, normalize_values : NormalizeValues):
+        if self.is_normalized:
+            raise ValueError("Data is already normalized.")
+        if normalize_values is None:
+            raise ValueError("Normalize values are empty.")
+
+        # normalize Labeled points
+        for surface_data in self.list:
+            for labeled_point in surface_data.labeled_points_list.list:
+                original_point = labeled_point.point
+                normalized_point = (original_point - normalize_values.shift_vector) / normalize_values.max_norm
+                labeled_point.point = normalized_point
+
+
     def normalize_all_elements(self):
         # todo test if it is working
         """
@@ -543,7 +583,7 @@ class SurfacePointsFrameList:
         import numpy as np
 
         def __normalize_time(surface_data_list):
-            total_length = len(surface_data_list.list) - 1
+            total_length = len(surface_data_list.list)
             for surface_data in surface_data_list.list:
                 surface_data.time.value /= total_length
 
@@ -570,9 +610,14 @@ class SurfacePointsFrameList:
                 surface_data.points_list = normalized_points
 
                 # normalize mesh
-                mesh = surface_data.mesh
-                normalized_mesh = __create_normalized_mesh(shift_vector, max_norm, mesh)
-                surface_data.mesh = normalized_mesh
+
+                try:
+                    mesh = surface_data.mesh
+                except ValueError:
+                    mesh = None
+                if mesh is not None:
+                    normalized_mesh = __create_normalized_mesh(shift_vector, max_norm, mesh)
+                    surface_data.mesh = normalized_mesh
 
         def __shift_and_scale_centers(shift_vector, max_norm):
             for surface_data in self.list:
@@ -588,18 +633,23 @@ class SurfacePointsFrameList:
         # Compute the shift vector and max norm
         shift_vector, max_norm = __compute_shift_and_scale(self)
 
+        self._normalized_settings = NormalizedSetttings(True, shift_vector, max_norm)
+
         # Shift points to origin and scale
         __shift_and_scale_points(shift_vector, max_norm)
 
         __shift_and_scale_centers(shift_vector, max_norm)
-
-        self._normalized_settings = NormalizedSetttings(True, shift_vector, max_norm)
 
         return self
 
     @property
     def is_normalized(self):
         return self._normalized_settings.is_normalized
+
+    @property
+    def normalize_values(self) -> NormalizeValues:
+        return NormalizeValues(self._normalized_settings.shift_vector, self._normalized_settings.max_norm)
+
 
     def get_unique_times(self):
         """
@@ -608,7 +658,7 @@ class SurfacePointsFrameList:
 
         return {surface_data.time.value for surface_data in self.list}
 
-    def get_element_by_time_index(self, time_index : int) -> SurfacePointsFrame:
+    def get_element_by_time_index(self, time_index : int) -> SurfacePointsFrame | None:
         """
         Find the element in the list with the specified time index.
         """
@@ -697,8 +747,6 @@ class SurfacePointsFrameList:
         if not isinstance(surface_data, SurfacePointsFrame):
             raise TypeError("surface_data must be an instance of SurfaceData")
         self.list.append(surface_data)
-        if surface_data.time is not None:
-            self.max_time_index = max(self.max_time_index, surface_data.time.index)  # Update unique clusters
 
     def filter_by_label(self, label_index):
         """
@@ -789,6 +837,19 @@ class SurfacePointsFrameList:
 
         return meshes_list
 
+    def get_original_meshes_list(self) -> MeshList:
+        """
+        Return the list of original meshes.
+        if some none mesh is found, raise ValueError
+        and check if index of output list of mesh is same as time index
+        """
+        meshes_list = MeshList()
+        for i, surface_data in enumerate(self.list):
+            if surface_data.original_mesh is None:
+                raise ValueError("Original mesh is not loaded.")
+            meshes_list.append((surface_data.time.index, surface_data.original_mesh))
+
+        return meshes_list
 
 def time_frame_list_find_closest_element_index(time_frame_list: List[TimeFrame], time_value: float) -> int:
     if time_value == 0.0:

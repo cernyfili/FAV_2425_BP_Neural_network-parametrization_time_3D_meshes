@@ -1,7 +1,7 @@
 # Main function to orchestrate the processing and training for each cluster
 import logging
 
-from nerual_network.evaluation import evaluate
+from nerual_network.evaluation.evaluation import evaluate
 from nerual_network.training import train_nn
 from src.data_processing.clustering import process_clustered_data
 from src.data_processing.mapping import process_surface_data
@@ -35,11 +35,11 @@ def main():
                                    num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS,
                                    time_steps=CDataPreprocessing.MAX_TIME_STEPS)
 
-        train_config.nn_config.loss_function_name = "centers"
+        train_config.nn_config.loss_function_name = "standard"
 
         if TEST_MODE:
-            train_config.nn_config.max_epochs = 2
-            train_config.num_surface_points = 1000
+            train_config.nn_config.max_epochs = 5
+            train_config.num_surface_points = 5000
 
         logger = init_logger(train_config.file_path_config.log_filepath)
 

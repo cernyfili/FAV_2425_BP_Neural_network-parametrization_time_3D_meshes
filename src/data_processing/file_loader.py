@@ -16,9 +16,24 @@ def __getattr__(name):
     raise AttributeError(f"Module has no attribute {name}")
 
 # Function to compute Euclidean distance between two 3D points
-def _euclidean_distance(p1, p2):
-    from math import sqrt
-    return sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2 + (p1[2] - p2[2]) ** 2)
+# def _euclidean_distance(p1, p2):
+#     from math import sqrt
+#     return sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2 + (p1[2] - p2[2]) ** 2)
+
+
+
+#
+# # Function for DBSCAN clustering using precomputed distances
+# def _dbscan_clustering_from_precomputed_distances(distances, eps=0.5, min_samples=5):
+#     # Extract the upper triangle of the matrix (if needed) or use the distances directly
+#     # distances = distances[np.triu_indices(distances.shape[0], k=1)]  # If necessary
+#
+#     # Perform DBSCAN clustering with the precomputed distance matrix
+#     db = DBSCAN(eps=eps, min_samples=min_samples, metric='precomputed')
+#     labels = db.fit_predict(distances)
+#
+#     return labels
+#
 
 
 # Function to load .xyz files
@@ -52,52 +67,6 @@ def _load_xyz_files(filepaths) -> np.ndarray:
     return np.array(points_allframes) # Shape: (num_files, num_time_steps, num_points)
 
     # Function to compute max distances between pairs of points across time
-
-
-def compute_max_distances_for_all_pairs(center_points_allframes):
-    # todo check if it does what i want
-    """
-    Compute the maximum pairwise distances for all points in each file.
-
-    Parameters:
-    - data: List of arrays, each containing 3D point data for a file
-    - num_points_in_file: int, number of points in each file
-
-    Returns:
-    - max_distances_mx: np.ndarray of shape (num_points_in_file, num_points_in_file)
-    """
-
-    num_points_in_file = center_points_allframes.shape[1]
-
-    max_distances_mx = np.zeros((num_points_in_file, num_points_in_file))
-
-    size = len(center_points_allframes)
-    for i, center_points_frame in enumerate(center_points_allframes):
-        # Reshape row into list of 3D points
-        points = center_points_frame.reshape(-1, 3)
-
-        # Compute pairwise distances using broadcasting
-        diff = points[:, None, :] - points[None, :, :]  # Pairwise differences
-        distances = np.sqrt(np.sum(diff**2, axis=-1))  # Pairwise Euclidean distances
-
-        # Update max distances
-        max_distances_mx = np.maximum(max_distances_mx, distances)
-
-        logging.info(f"Computing max distances {i + 1} of {size}")
-
-    return max_distances_mx
-
-
-# Function for DBSCAN clustering using precomputed distances
-def _dbscan_clustering_from_precomputed_distances(distances, eps=0.5, min_samples=5):
-    # Extract the upper triangle of the matrix (if needed) or use the distances directly
-    # distances = distances[np.triu_indices(distances.shape[0], k=1)]  # If necessary
-
-    # Perform DBSCAN clustering with the precomputed distance matrix
-    db = DBSCAN(eps=eps, min_samples=min_samples, metric='precomputed')
-    labels = db.fit_predict(distances)
-
-    return labels
 
 
 # Function to load .bin files and return data
@@ -135,7 +104,7 @@ def _load_bin_files(filepaths):
     return np.array(data) # Shape: (num_files, num_time_steps, num_points)
 
 
-def load_centers_data(folder_path, time_steps) -> np.ndarray:
+def load_centers_files(folder_path, time_steps) -> np.ndarray:
     """
     Load .xyz files or .bin files from the specified folder and compute the maximum distances between points.
     :param folder_path: path to where is files with computed centers points

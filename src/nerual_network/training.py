@@ -20,31 +20,126 @@ def __getattr__(name):
     raise AttributeError(f"Module has no attribute {name}")
 
 
-# region TRAIN ONE EPOCH - different loss functions
-# Function to perform one training epoch
-def _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info):
-    model.to(device)
-    model.train()  # Set model to training mode
-    train_loss = 0
-    for inputs, targets in train_loader:
+# region PRIVATE FUNCTIONS
+#
+# # Function to split data and create data loaders
+# def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
+#     # Create an instance of SurfaceDataset using the provided surface_data_list
+#     dataset = NNDataset(surface_data_list)
+#
+#     # Split indices for training and validation
+#     train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+#
+#     # Create subsets for training and validation
+#     train_dataset = Subset(dataset, train_indices)
+#     val_dataset = Subset(dataset, val_indices)
+#
+#     # Create data loaders for training and validation
+#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+#
+#     return train_loader, val_loader
+
+# Function to split data and create data loaders
+def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
+    # Create an instance of SurfaceDataset using the provided surface_data_list
+    dataset = NNDataset(surface_data_list)
+
+    # Split indices for training and validation
+    train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+
+    # Create subsets for training and validation
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset = Subset(dataset, val_indices)
+
+    #Sort each subset by the time index column
+    train_dataset.indices = sorted(train_dataset.indices)
+    val_dataset.indices = sorted(val_dataset.indices)
+
+    # Create data loaders for training and validation
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    return train_loader, val_loader
+
+
+#
+# def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
+#     # Create an instance of SurfaceDataset using the provided surface_data_list
+#     dataset = NNDataset(surface_data_list)
+#
+#     # Split indices for training and validation
+#     split_idx = int(0.8 * len(dataset))
+#     train_indices = list(range(split_idx))  # First 80%
+#     val_indices = list(range(split_idx, len(dataset)))  # Last 20%
+#
+#     # Create subsets for training and validation
+#     train_dataset = Subset(dataset, train_indices)
+#     val_dataset = Subset(dataset, val_indices)
+#
+#     # Sort each subset by the time index column
+#     train_dataset.indices = sorted(train_dataset.indices)
+#     val_dataset.indices = sorted(val_dataset.indices)
+#
+#     # Create data loaders for training and validation
+#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+#
+#     return train_loader, val_loader
+
+
+# Function to evaluate the model on the validation set
+def _evaluate(model, val_loader, loss_function, device, loss_function_info):
+    model.eval()  # Set model to evaluation mode
+    val_loss = 0
+    # with torch.no_grad():
+    for inputs, targets in val_loader:
         inputs, targets = inputs.float().to(device), targets.float().to(device)
 
-        # Forward pass
         loss = loss_function(inputs, targets, model, loss_function_info)
-
-        # Backward pass and optimization
-        optimizer.zero_grad()
-        loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping
-        optimizer.step()
-
-        train_loss += loss.item()
-
-    return train_loss / len(train_loader)  # Return average loss for the epoch
+        val_loss += loss.item()
+    return val_loss / len(val_loader)  # Return average validation loss
 
 
+# Function to save the model checkpoint
+def _save_checkpoint(model, optimizer, epoch, val_loss):
+    logging.info(f"Model saved with validation loss {val_loss:.4f} at epoch {epoch}")
+    return {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'val_loss': val_loss,
+    }
 # endregion
 
+
+# Function to train the neural network for each cluster
+def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, train_config : TrainConfig):
+    max_epochs = train_config.nn_config.max_epochs
+    model_weights_template = train_config.file_path_config.model_weights_folderpath_template
+
+    if max_epochs == 0:
+        return
+
+    logging.info("Starting Training Neural network")
+    # Identify unique clusters in the data
+    unique_clusters = surface_data_list.get_unique_clusters()
+    meshes_list = surface_data_list.get_meshes_list()
+
+    for cluster in unique_clusters:
+        # Filter data for the current cluster
+        surface_data_cluster = surface_data_list.filter_by_label(cluster)
+
+        # Define a specific filepath for the model weights for this cluster
+        model_weights_filepath = model_weights_template.format(cluster=cluster)
+
+        logging.info(f"--------------------Training neural network for cluster {cluster}...")
+
+        # Train the neural network on the current cluster's data
+        _train_neural_network(data=surface_data_cluster, model_save_path=model_weights_filepath,
+                              meshes_list=meshes_list, train_config=train_config)
+
+        logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
 
 # Main training function with early stopping and scheduler
 def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_list, train_config: TrainConfig):
@@ -103,126 +198,26 @@ def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_
     torch.save(best_checkpoint, model_save_path)
     logging.info(f"Training completed. Best model saved to {model_save_path}")
 
-
-# Function to train the neural network for each cluster
-def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, train_config : TrainConfig):
-    max_epochs = train_config.nn_config.max_epochs
-    model_weights_template = train_config.file_path_config.model_weights_folderpath_template
-
-    if max_epochs == 0:
-        return
-
-    logging.info("Starting Training Neural network")
-    # Identify unique clusters in the data
-    unique_clusters = surface_data_list.get_unique_clusters()
-    meshes_list = surface_data_list.get_meshes_list()
-
-    for cluster in unique_clusters:
-        # Filter data for the current cluster
-        surface_data_cluster = surface_data_list.filter_by_label(cluster)
-
-        # Define a specific filepath for the model weights for this cluster
-        model_weights_filepath = model_weights_template.format(cluster=cluster)
-
-        logging.info(f"--------------------Training neural network for cluster {cluster}...")
-
-        # Train the neural network on the current cluster's data
-        _train_neural_network(data=surface_data_cluster, model_save_path=model_weights_filepath,
-                              meshes_list=meshes_list, train_config=train_config)
-
-        logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
-
-#
-# # Function to split data and create data loaders
-# def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
-#     # Create an instance of SurfaceDataset using the provided surface_data_list
-#     dataset = NNDataset(surface_data_list)
-#
-#     # Split indices for training and validation
-#     train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
-#
-#     # Create subsets for training and validation
-#     train_dataset = Subset(dataset, train_indices)
-#     val_dataset = Subset(dataset, val_indices)
-#
-#     # Create data loaders for training and validation
-#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-#
-#     return train_loader, val_loader
-# Function to split data and create data loaders
-# def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
-#     # Create an instance of SurfaceDataset using the provided surface_data_list
-#     dataset = NNDataset(surface_data_list)
-#
-#     # Split indices for training and validation
-#     train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
-#
-#     # Create subsets for training and validation
-#     train_dataset = Subset(dataset, train_indices)
-#     val_dataset = Subset(dataset, val_indices)
-#
-#     # Sort each subset by the time index column
-#     # train_dataset.indices = sorted(train_dataset.indices)
-#     # val_dataset.indices = sorted(val_dataset.indices)
-#
-#     # Create data loaders for training and validation
-#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-#
-#     return train_loader, val_loader
-
-
-
-
-
-def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
-    # Create an instance of SurfaceDataset using the provided surface_data_list
-    dataset = NNDataset(surface_data_list)
-
-    # Split indices for training and validation
-    split_idx = int(0.8 * len(dataset))
-    train_indices = list(range(split_idx))  # First 80%
-    val_indices = list(range(split_idx, len(dataset)))  # Last 20%
-
-    # Create subsets for training and validation
-    train_dataset = Subset(dataset, train_indices)
-    val_dataset = Subset(dataset, val_indices)
-
-    # Sort each subset by the time index column
-    train_dataset.indices = sorted(train_dataset.indices)
-    val_dataset.indices = sorted(val_dataset.indices)
-
-    # Create data loaders for training and validation
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
-    return train_loader, val_loader
-
-
-# Function to evaluate the model on the validation set
-def _evaluate(model, val_loader, loss_function, device, loss_function_info):
-    model.eval()  # Set model to evaluation mode
-    val_loss = 0
-    # with torch.no_grad():
-    for inputs, targets in val_loader:
+# Function to perform one training epoch
+def _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info):
+    model.to(device)
+    model.train()  # Set model to training mode
+    train_loss = 0
+    for inputs, targets in train_loader:
         inputs, targets = inputs.float().to(device), targets.float().to(device)
 
+        # Forward pass
         loss = loss_function(inputs, targets, model, loss_function_info)
-        val_loss += loss.item()
-    return val_loss / len(val_loader)  # Return average validation loss
 
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping
+        optimizer.step()
 
-# Function to save the model checkpoint
-def _save_checkpoint(model, optimizer, epoch, val_loss):
-    logging.info(f"Model saved with validation loss {val_loss:.4f} at epoch {epoch}")
-    return {
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'val_loss': val_loss,
-    }
+        train_loss += loss.item()
 
+    return train_loss / len(train_loader)  # Return average loss for the epoch
 
 def train_nn(train_config: TrainConfig):
     logging.info("------------------TRAINING STARTED------------------")

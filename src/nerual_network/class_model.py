@@ -12,7 +12,6 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
-
 class NNDataset(Dataset):
     def __init__(self, surface_data_list: SurfacePointsFrameList):
         if surface_data_list is None:
@@ -77,6 +76,12 @@ class NNDataset(Dataset):
         return_tensor = input_tensor[mask]
         return return_tensor
 
+    @staticmethod
+    def split_by_time_value(input_tensor : np.ndarray) -> list[np.ndarray]:
+        time_indices = input_tensor[:, 3]
+        unique_time_indices = np.unique(time_indices)
+        return [input_tensor[time_indices == time_index] for time_index in unique_time_indices]
+
 
 class Simple_MLP_01(nn.Module):
     def __init__(self):
@@ -96,7 +101,6 @@ class Simple_MLP_01(nn.Module):
         encoded_with_time = torch.cat((encoded_features, time_value), dim=1)  # Concatenate encoded features with time
         decoded_output = self.decoder(encoded_with_time)
         return decoded_output
-
 
 class Simple_MLP_02(nn.Module):
     """

@@ -20,6 +20,21 @@ def __getattr__(name):
     raise AttributeError(f"Module has no attribute {name}")
 
 
+
+def categorize_points_with_labels(centers_labels_frame, centers_points_frame, points):
+    centers_points_frame = np.array(centers_points_frame)
+    centers_labels_frame = np.array(centers_labels_frame)
+    if centers_points_frame.shape[0] != centers_labels_frame.shape[0]:
+        raise ValueError("Shapes of points and labels do not match.")
+    # Build a KDTree for the clustered points
+    kdtree = KDTree(centers_points_frame)
+    # Find the closest clustered point for each surface point
+    _, indices = kdtree.query(points)
+    # Assign the cluster label of the closest point to the surface point
+    surface_labels = centers_labels_frame[indices]
+    # todo check if surface_labels is generated with same size as surface_points
+    return surface_labels
+
 # region PRIVATE FUNCTIONS
 
 # def _convert_to_surface_data_list(input_list):
@@ -108,21 +123,6 @@ def _create_categorized_surface_points(mesh, centers_points_frame, centers_label
     return np.array(surface_points), np.array(surface_labels)
 
 
-def categorize_points_with_labels(centers_labels_frame, centers_points_frame, points):
-    centers_points_frame = np.array(centers_points_frame)
-    centers_labels_frame = np.array(centers_labels_frame)
-    if centers_points_frame.shape[0] != centers_labels_frame.shape[0]:
-        raise ValueError("Shapes of points and labels do not match.")
-    # Build a KDTree for the clustered points
-    kdtree = KDTree(centers_points_frame)
-    # Find the closest clustered point for each surface point
-    _, indices = kdtree.query(points)
-    # Assign the cluster label of the closest point to the surface point
-    surface_labels = centers_labels_frame[indices]
-    # todo check if surface_labels is generated with same size as surface_points
-    return surface_labels
-
-
 def _create_surface_points_from_mesh_list(meshes_filepaths_list: list, clustered_data: ClusteredCenterPointsAllFrames,
                                           num_surface_points: int):
     """
@@ -172,25 +172,6 @@ def _prepare_surface_data(meshes_filepaths_list, clustered_data, num_surface_poi
     surface_data_list.normalize_all_elements()
 
     return surface_data_list
-
-
-def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path):
-    # meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
-    len_clustered_data = len(clustered_data.points_allframes)
-    meshes_filepaths_list = get_meshes_list(meshes_folder_path, len_clustered_data)
-    logging.info("Creating surface points for all meshes...")
-    surface_data_list = _prepare_surface_data(meshes_filepaths_list, clustered_data, num_surface_points)
-    logging.info("Surface points created and normalized.")
-    return surface_data_list
-
-
-def _save_surface_data(clustered_data: ClusteredCenterPointsAllFrames, num_surface_points, meshes_folder_path,
-                       surface_data_filepath):
-    surface_data_list = _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path)
-
-    # save the surface data list
-    with open(surface_data_filepath, 'wb') as f:
-        pickle.dump(surface_data_list, f)
 
 
 # def _generate_random_points_on_mesh(vertices, faces, num_points):
@@ -272,44 +253,58 @@ def _generate_random_points_on_mesh(vertices, faces, num_points):
     return points
 
 
-# region visulization
-
-def _visualize_surface_points(points, labels):
-    """
-    Visualize the categorization of surface points in 3D.
-
-    Parameters:
-    points (numpy.ndarray): Array of 3D points with shape (n_points, 3).
-    labels (numpy.ndarray): Array of cluster labels for each point with shape (n_points,).
-
-    Returns:
-    None
-    """
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-
-    # Scatter plot with different colors for each cluster
-    scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=labels, cmap='viridis', marker='o')
-
-    # Add color bar to show the cluster labels
-    color_bar = plt.colorbar(scatter, ax=ax, pad=0.1)
-    color_bar.set_label('Cluster Label')
-
-    # Set labels for axes
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-
-    # Set title
-    ax.set_title('3D Visualization of Surface Points Categorization')
-
-    # Show plot
-    plt.show()
-
+# def _visualize_surface_points(points, labels):
+#     """
+#     Visualize the categorization of surface points in 3D.
+#
+#     Parameters:
+#     points (numpy.ndarray): Array of 3D points with shape (n_points, 3).
+#     labels (numpy.ndarray): Array of cluster labels for each point with shape (n_points,).
+#
+#     Returns:
+#     None
+#     """
+#     fig = plt.figure()
+#     ax = fig.add_subplot(111, projection='3d')
+#
+#     # Scatter plot with different colors for each cluster
+#     scatter = ax.scatter(points[:, 0], points[:, 1], points[:, 2], c=labels, cmap='viridis', marker='o')
+#
+#     # Add color bar to show the cluster labels
+#     color_bar = plt.colorbar(scatter, ax=ax, pad=0.1)
+#     color_bar.set_label('Cluster Label')
+#
+#     # Set labels for axes
+#     ax.set_xlabel('X')
+#     ax.set_ylabel('Y')
+#     ax.set_zlabel('Z')
+#
+#     # Set title
+#     ax.set_title('3D Visualization of Surface Points Categorization')
+#
+#     # Show plot
+#     plt.show()
 
 # endregion
 
-# endregion
+def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path):
+    # meshes_filepaths_list = get_filepaths_from_json(meshes_folder_path, json_file_path)
+    len_clustered_data = len(clustered_data.points_allframes)
+    meshes_filepaths_list = get_meshes_list(meshes_folder_path, len_clustered_data)
+    logging.info("Creating surface points for all meshes...")
+    surface_data_list = _prepare_surface_data(meshes_filepaths_list, clustered_data, num_surface_points)
+    logging.info("Surface points created and normalized.")
+    return surface_data_list
+
+
+def _save_surface_data(clustered_data: ClusteredCenterPointsAllFrames, num_surface_points, meshes_folder_path,
+                       surface_data_filepath):
+    surface_data_list = _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path)
+
+    # save the surface data list
+    with open(surface_data_filepath, 'wb') as f:
+        pickle.dump(surface_data_list, f)
+
 
 # Function to process and save neural network data if not already processed
 def process_surface_data(num_surface_points, meshes_folder_path, surface_data_filepath, clustered_data_filepath):
