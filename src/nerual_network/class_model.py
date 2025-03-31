@@ -38,7 +38,7 @@ class NNDataset(Dataset):
     def __getitem__(self, idx):
         # Separate data based on the target and input requirements
         targets = self.data[idx, :3]   # First 3 columns as targets
-        inputs = self.data[idx]    # All 4 columns as inputs, including "time" as the last one
+        inputs = self.data[idx]    # All columns as inputsis
         return inputs, targets
 
     @staticmethod
@@ -168,6 +168,7 @@ class Simple_MLP_03(nn.Module):
     """
     Changes:
     - at the end of encoder added Tanh activation function
+    used for loss function: uv streach
     """
     def __init__(self):
         super(Simple_MLP_03, self).__init__()
@@ -234,6 +235,7 @@ class Simple_MLP_04(nn.Module):
     """
     Changes:
     - simplier architecture to reduce overfitting
+    used for loss function: centers
     """
     def __init__(self):
         super(Simple_MLP_04, self).__init__()

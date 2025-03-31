@@ -305,8 +305,6 @@ class SurfacePointsFrame:
             all_closest_centers_list.append(points_closest_centers)
         return all_closest_centers_list
 
-
-
     @classmethod
     def create_instance(cls, surface_points : np.ndarray, surface_labels : np.ndarray, time: TimeFrame, mesh: Trimesh, centers_points: np.ndarray):
         return cls(surface_points, surface_labels, time, mesh, centers_points)

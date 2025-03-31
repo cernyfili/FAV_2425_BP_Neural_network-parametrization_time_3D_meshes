@@ -11,7 +11,7 @@ class ClusteredCenterPointsAllFrames:
     def __init__(self, points_allframes : np.array, labels_frame):
         """
 
-        :param points_allframes: np.ndarray of shape of element (x, y, z)
+        :param
         :param labels_frame:
         """
         self.points_allframes : np.array = points_allframes
