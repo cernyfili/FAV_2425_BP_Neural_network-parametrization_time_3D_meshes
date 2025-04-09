@@ -72,14 +72,14 @@ def _visualize_all_clusters_for_each_time(surface_data_list: SurfacePointsFrameL
     os.makedirs(image_save_folder, exist_ok=True)
 
     # Loop through each unique time value
-    for i, surface_data_frame in enumerate(surface_data_list.list):
+    for i, surface_data_frame in enumerate(surface_data_list.public_list):
         if surface_data_frame.time.index != i:
             raise Exception("Not same time")
 
         cluster_labels = surface_data_frame.labels_list
         # transfrom surface_data_slice to array with points
 
-        points_slice = np.array(surface_data_frame.points_list)
+        points_slice = np.array(surface_data_frame.normalized_points_list)
         # transform cluster_labels to array
         cluster_labels = np.array(cluster_labels)
         _visualize_clusters(points_slice, cluster_labels, image_save_folder, f'time_{i}_clusters_time.png')
@@ -430,7 +430,7 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
 
         processed_points_one_cluster = []
         # Step 2: Decode in all times
-        for i, surface_points_frame in enumerate(surface_data_list.list):
+        for i, surface_points_frame in enumerate(surface_data_list.public_list):
             if surface_points_frame.time.index != i:
                 raise Exception("Not same time")
 
@@ -585,9 +585,9 @@ def _visualize_combined_surface_points_for_one_time(image_save_folder, original_
 
 def _compute_variance(evaluation_results_list):
     variance_list = []
-    for evaluation_result in evaluation_results_list.list:
+    for evaluation_result in evaluation_results_list._list:
         variance_list_list = []
-        for decoder_element in evaluation_result.decoder_pair_list.list:
+        for decoder_element in evaluation_result.decoder_pair_list._list:
             unique_ids = decoder_element.pair_processed_center.get_unique_ids()
             for id in unique_ids:
                 pair_list = decoder_element.pair_processed_center.get_decoder_element_by_id(id)
@@ -618,17 +618,19 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
     """
 
     def load_centers_data_from_files(folder_path, time_steps):
-        center_points, num_points_in_file = load_centers_files(folder_path, time_steps)
-        # make it a Surface data list where each SurfacePoint is one num_points_in_file slice of center_points
-
-        # itarate over center_points and create SurfacePoint with num_points_in_file points
-        center_points_list_current = SurfacePointsFrameList([])
-        for i in range(0, center_points.shape[0]):
-            center_points_list_current.append(SurfacePointsFrame(center_points[i]))
-
-        center_points_list_current.assign_time_to_all_elements()
-        center_points_list_current.normalize_all_elements()
-        return center_points_list_current
+        raise  NotImplementedError("Not implemented yet")
+        #
+        # center_points, num_points_in_file = load_centers_files(folder_path, time_steps)
+        # # make it a Surface data list where each SurfacePoint is one num_points_in_file slice of center_points
+        #
+        # # itarate over center_points and create SurfacePoint with num_points_in_file points
+        # center_points_list_current = SurfacePointsFrameList([])
+        # for i in range(0, center_points.shape[0]):
+        #     center_points_list_current.append(SurfacePointsFrame(center_points[i]))
+        #
+        # center_points_list_current.assign_time_to_all_elements()
+        # center_points_list_current.normalize_all_elements()
+        # return center_points_list_current
 
     def compute_distance(first_point, second_point):
         return np.linalg.norm(first_point - second_point)
@@ -636,10 +638,10 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
     def find_closest_centers(center_points_list: SurfacePointsFrame, points_list: SurfacePointsFrame):
         pair_original_center = []
         index = 0
-        for index_point, point in enumerate(points_list.points_list):
+        for index_point, point in enumerate(points_list.normalized_points_list):
             closest_center_point = None
             min_distance = float('inf')
-            for center_point in center_points_list.points_list:
+            for center_point in center_points_list.normalized_points_list:
                 distance = compute_distance(point, center_point)
                 if distance < min_distance:
                     closest_center_point = center_point
@@ -657,84 +659,86 @@ def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr)
 
     def run_through_model(center_points_list: SurfacePointsFrameList, surface_data_list: SurfacePointsFrameList,
                           model_weights_template: str, batch_size: int, num_points: int, nn_lr):
-        # todo check if should be normalized
-        if len(center_points_list.list) != len(surface_data_list.list):
-            raise Exception("Not same number of center points and surface data")
-        pair_list_len = len(surface_data_list.list)
+        raise NotImplementedError("Not implemented yet")
 
-        unique_clusters = surface_data_list.get_unique_clusters()
-        unique_times = surface_data_list.get_unique_times()
-
-        evaluation_result_list = EvaluationResultList([])
-
-        for i in range(0, pair_list_len):
-
-            # select original points where time is 0
-            surface_data_timeframe = surface_data_list.list[i]
-            if surface_data_timeframe.time.index != i:
-                raise Exception("Not same time")
-
-            encoder_time = surface_data_timeframe.time.value
-
-            center_points_timeframe = center_points_list.list[i]
-            if center_points_timeframe.time.index != i:
-                raise Exception("Not same time")
-
-            surface_data_timeframe = surface_data_list.select_random_points(num_points)
-
-            pair_original_center = find_closest_centers(center_points_timeframe, surface_data_timeframe)
-
-            for cluster in unique_clusters:
-
-                # Load the original surface points for the current cluster
-                pair_original_center_cluster = pair_original_center.filter_by_point_clusterlabel(cluster)
-                surface_data_cluster = pair_original_center_cluster.get_points_list()
-                surface_data_cluster = _convert_to_surfacepointsframelist(surface_data_cluster)
-
-                # Create a SurfaceDataset instance with the filtered surface data
-                original_points_dataset = NNDataset(surface_data_cluster)
-                # Prepare a DataLoader for original points
-                original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=False)
-
-                # Load the trained model for the current cluster
-                model_weights_filepath = model_weights_template.format(cluster=cluster)
-                model = _load_trained_model(model_weights_filepath, train_config)
-                device = torch.device(NN_DEVICE_STR)
-
-                model.to(device)
-
-                # Step 1: Encode the original data
-                with torch.no_grad():  # No need to calculate gradients during evaluation
-                    encoded_features = model.encoder(original_points_loader)
-
-                decoder_pair_list = DecoderPairList([])
-
-                # iterate to decoder over all times
-                for decoder_time in unique_times:
-                    # Create a tensor of the same shape as the time feature in the input
-                    time_tensor = torch.full((encoded_features.size(0), 1), decoder_time, dtype=torch.float32)
-                    # Concatenate the encoded features with the time tensor
-                    encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1)
-                    # Pass through the decoder
-                    decoded_output = model.decoder(encoded_with_time)
-
-                    decoder_processed_points = decoded_output
-                    decoder_processed_points_timeframe = SurfacePointsFrame([], None, decoder_time)
-                    # convert to
-                    for point in decoder_processed_points:
-                        decoder_processed_points_timeframe.points_list.append(point)
-
-                    decoder_center_points_timeframe = center_points_timeframe.get_element_by_time_index(decoder_time)
-
-                    decoder_pair_processed_center = find_closest_centers(decoder_center_points_timeframe,
-                                                                         decoder_processed_points_timeframe)
-
-                    decoder_pair_list.append(DecoderElement(decoder_pair_processed_center, decoder_time))
-
-                evaluation_result_list.append(
-                    EvaluationResult(pair_original_center_cluster, encoder_time, decoder_pair_list))
-
-        return evaluation_result_list
+        # # todo check if should be normalized
+        # if len(center_points_list.list) != len(surface_data_list.list):
+        #     raise Exception("Not same number of center points and surface data")
+        # pair_list_len = len(surface_data_list.list)
+        #
+        # unique_clusters = surface_data_list.get_unique_clusters()
+        # unique_times = surface_data_list.get_unique_times()
+        #
+        # evaluation_result_list = EvaluationResultList([])
+        #
+        # for i in range(0, pair_list_len):
+        #
+        #     # select original points where time is 0
+        #     surface_data_timeframe = surface_data_list.list[i]
+        #     if surface_data_timeframe.time.index != i:
+        #         raise Exception("Not same time")
+        #
+        #     encoder_time = surface_data_timeframe.time.value
+        #
+        #     center_points_timeframe = center_points_list.list[i]
+        #     if center_points_timeframe.time.index != i:
+        #         raise Exception("Not same time")
+        #
+        #     surface_data_timeframe = surface_data_list.select_random_points(num_points)
+        #
+        #     pair_original_center = find_closest_centers(center_points_timeframe, surface_data_timeframe)
+        #
+        #     for cluster in unique_clusters:
+        #
+        #         # Load the original surface points for the current cluster
+        #         pair_original_center_cluster = pair_original_center.filter_by_point_clusterlabel(cluster)
+        #         surface_data_cluster = pair_original_center_cluster.get_points_list()
+        #         surface_data_cluster = _convert_to_surfacepointsframelist(surface_data_cluster)
+        #
+        #         # Create a SurfaceDataset instance with the filtered surface data
+        #         original_points_dataset = NNDataset(surface_data_cluster)
+        #         # Prepare a DataLoader for original points
+        #         original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=False)
+        #
+        #         # Load the trained model for the current cluster
+        #         model_weights_filepath = model_weights_template.format(cluster=cluster)
+        #         model = _load_trained_model(model_weights_filepath, train_config)
+        #         device = torch.device(NN_DEVICE_STR)
+        #
+        #         model.to(device)
+        #
+        #         # Step 1: Encode the original data
+        #         with torch.no_grad():  # No need to calculate gradients during evaluation
+        #             encoded_features = model.encoder(original_points_loader)
+        #
+        #         decoder_pair_list = DecoderPairList([])
+        #
+        #         # iterate to decoder over all times
+        #         for decoder_time in unique_times:
+        #             # Create a tensor of the same shape as the time feature in the input
+        #             time_tensor = torch.full((encoded_features.size(0), 1), decoder_time, dtype=torch.float32)
+        #             # Concatenate the encoded features with the time tensor
+        #             encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1)
+        #             # Pass through the decoder
+        #             decoded_output = model.decoder(encoded_with_time)
+        #
+        #             decoder_processed_points = decoded_output
+        #             decoder_processed_points_timeframe = SurfacePointsFrame([], None, decoder_time)
+        #             # convert to
+        #             for point in decoder_processed_points:
+        #                 decoder_processed_points_timeframe.points_list.append(point)
+        #
+        #             decoder_center_points_timeframe = center_points_timeframe.get_element_by_time_index(decoder_time)
+        #
+        #             decoder_pair_processed_center = find_closest_centers(decoder_center_points_timeframe,
+        #                                                                  decoder_processed_points_timeframe)
+        #
+        #             decoder_pair_list.append(DecoderElement(decoder_pair_processed_center, decoder_time))
+        #
+        #         evaluation_result_list.append(
+        #             EvaluationResult(pair_original_center_cluster, encoder_time, decoder_pair_list))
+        #
+        # return evaluation_result_list
 
         # load center points
 
@@ -795,18 +799,20 @@ def _compute_mesh_shape_metrics(surface_data_list: SurfacePointsFrameList, train
 
     def label_points_by_clustered_data(surface_data_list: SurfacePointsFrameList,
                                        clustered_data: ClusteredCenterPointsAllFrames):
-        final_surface_data_list = SurfacePointsFrameList([])
-
-        for i, surface_data_frame in enumerate(surface_data_list.list):
-            mesh_points = surface_data_frame.points_list
-            centers_points_frame = clustered_data.points_allframes[i]
-            centers_labels_frame = clustered_data.labels_frame
-            # check indexes with filepath names
-
-            surface_labels = categorize_points_with_labels(centers_labels_frame, centers_points_frame, mesh_points)
-            # append both values to list with names in the list
-            final_surface_data_list.append(SurfacePointsFrame(mesh_points, surface_labels, None))
-        return final_surface_data_list
+        raise NotImplementedError("Not implemented yet")
+        #
+        # final_surface_data_list = SurfacePointsFrameList([])
+        #
+        # for i, surface_data_frame in enumerate(surface_data_list.list):
+        #     mesh_points = surface_data_frame.points_list
+        #     centers_points_frame = clustered_data.points_allframes[i]
+        #     centers_labels_frame = clustered_data.labels_frame
+        #     # check indexes with filepath names
+        #
+        #     surface_labels = categorize_points_with_labels(centers_labels_frame, centers_points_frame, mesh_points)
+        #     # append both values to list with names in the list
+        #     final_surface_data_list.append(SurfacePointsFrame(mesh_points, surface_labels, None))
+        # return final_surface_data_list
 
     mesh_folder_path = train_config.file_path_config.raw_data_folderpath
     loaded_meshes_list = get_loaded_meshes_list(mesh_folder_path)
@@ -817,7 +823,7 @@ def _compute_mesh_shape_metrics(surface_data_list: SurfacePointsFrameList, train
         vertices = mesh.vertices
         all_vertices.append(vertices)
 
-    mesh_points_allframes = _convert_to_surfacepointsframelist(all_vertices)
+    mesh_points_allframes : SurfacePointsFrameList = _convert_to_surfacepointsframelist(all_vertices)
     mesh_points_allframes = label_points_by_clustered_data(mesh_points_allframes, clustered_data)
 
     mesh_points_allframes.assign_time_to_all_elements()
@@ -828,23 +834,23 @@ def _compute_mesh_shape_metrics(surface_data_list: SurfacePointsFrameList, train
     original_points_all, processed_points_all, cluster_labels = _run_model_decoder_all_times_with_selected_encoder_time(
         surface_data_list=mesh_points_allframes, time_index=time, train_config=train_config)
 
-    if len(loaded_meshes_list) != len(surface_data_list.list) and len(mesh_points_allframes.list) != len(
-            surface_data_list.list):
+    if len(loaded_meshes_list) != len(surface_data_list.public_list) and len(mesh_points_allframes.public_list) != len(
+            surface_data_list.public_list):
         raise Exception("Not same number of loaded meshes and surface data")
 
     similarity_list = []
     # compare the output of the decoder with the mesh in the same time
-    for i, surface_data_frame in enumerate(surface_data_list.list):
+    for i, surface_data_frame in enumerate(surface_data_list.public_list):
         if surface_data_frame.time.index != i:
             raise Exception("Not same time")
         time = surface_data_frame.time.value
 
         loaded_mesh_timeframe = loaded_meshes_list[i]
 
-        mesh_points_timeframe = mesh_points_allframes.list[i]
+        mesh_points_timeframe = mesh_points_allframes.public_list[i]
         if mesh_points_timeframe.time.index != i:
             raise Exception("Not same time")
-        mesh_points_timeframe_points = mesh_points_timeframe.points_list
+        mesh_points_timeframe_points = mesh_points_timeframe.normalized_points_list
 
         processed_points_timeframe = processed_points_all[processed_points_all[:, 3] == time]
 
@@ -859,12 +865,13 @@ def _compute_mesh_shape_metrics(surface_data_list: SurfacePointsFrameList, train
 
 
 def _convert_to_surfacepointsframelist(all_vertices):
-    # transform mesh vertices to  and normalize them and add time
-    mesh_points_list = SurfacePointsFrameList([])
-    for vertices in all_vertices:
-        mesh_points = SurfacePointsFrame(vertices)
-        mesh_points_list.append(mesh_points)
-    return mesh_points_list
+    raise NotImplementedError("Not implemented yet")
+    # # transform mesh vertices to  and normalize them and add time
+    # mesh_points_list = SurfacePointsFrameList([])
+    # for vertices in all_vertices:
+    #     mesh_points = SurfacePointsFrame(vertices)
+    #     mesh_points_list.append(mesh_points)
+    # return mesh_points_list
 
 
 def _save_pointcloud_all_times(surface_data_list, images_save_folderpath, time, train_config):
@@ -878,7 +885,7 @@ def evaluate(train_config: TrainConfig):
 
     surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
 
-    if surface_data_list is None or surface_data_list.list is None:
+    if surface_data_list is None or surface_data_list.public_list is None:
         logging.error("Surface data list could not be loaded. Exiting.")
         return
     # surface_data_list = convert_to_surface_data_list(surface_data_list)

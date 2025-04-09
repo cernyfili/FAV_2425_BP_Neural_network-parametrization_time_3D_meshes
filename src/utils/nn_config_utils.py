@@ -10,7 +10,7 @@ Description:
 
 from torch import optim, nn
 
-from nerual_network.class_model import Simple_MLP_04
+from nerual_network.class_model import Simple_MLP_04, Simple_MLP_01, Simple_MLP_02
 from nerual_network.loss_functions import LOSS_FUNCTIONS_LIST
 from utils.constants import TrainConfig
 
@@ -20,7 +20,7 @@ def init_training_config(train_config: TrainConfig) -> (nn.Module, optim.Optimiz
     nn_lr = train_config.nn_config.nn_lr
     loss_function_name = train_config.nn_config.loss_function_name
 
-    model = Simple_MLP_04()
+    model = Simple_MLP_02()
     optimizer = optim.Adam(model.parameters(), lr=nn_lr)
     loss_function = LOSS_FUNCTIONS_LIST[loss_function_name]
     return model, optimizer, loss_function

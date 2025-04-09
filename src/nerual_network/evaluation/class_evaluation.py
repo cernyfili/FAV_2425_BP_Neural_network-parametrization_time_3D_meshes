@@ -43,13 +43,13 @@ class DecoderPairList:
     def get_decoder_element_by_id(self, id):
         list = PairPointCenterPointList([])
         for element in self.list:
-            for pair in element.pair_processed_center.list:
+            for pair in element.pair_processed_center._list:
                 if pair.id == id:
                     list.append(pair)
         return list
 
     def get_unique_ids(self):
-        return list(set([pair.id for element in self.list for pair in element.pair_processed_center.list]))
+        return list(set([pair.id for element in self.list for pair in element.pair_processed_center._list]))
 
 
 class EvaluationResult:

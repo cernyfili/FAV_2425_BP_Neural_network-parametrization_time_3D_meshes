@@ -153,7 +153,7 @@ def process_mesh_through_model(origin_mesh_data: MeshData, train_config: TrainCo
         return None
 
     surface_data_list: SurfacePointsFrameList = load_pickle_file(train_config.file_path_config.surface_data_filepath)
-    if surface_data_list is None or surface_data_list.list is None:
+    if surface_data_list is None or surface_data_list.public_list is None:
         logging.error("Surface data list could not be loaded. Exiting.")
         return None
     # endregion
@@ -180,8 +180,7 @@ def process_mesh_through_model(origin_mesh_data: MeshData, train_config: TrainCo
 
         ## Create Surface data
         mesh_surface_points_frame = SurfacePointsFrame.create_instance(surface_points=mesh_vertices,
-                                                                       surface_labels=labels,
-                                                                       time=None, mesh=mesh,
+                                                                       surface_labels=labels, mesh=mesh,
                                                                        centers_points=centers_points_frame)
 
         ## region get time value

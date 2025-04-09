@@ -5,7 +5,9 @@ import pickle
 import numpy as np
 import trimesh
 from matplotlib import pyplot as plt
+from matplotlib.collections import TriMesh
 from scipy.spatial import KDTree
+from trimesh import Trimesh
 
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
@@ -124,7 +126,7 @@ def _create_categorized_surface_points(mesh, centers_points_frame, centers_label
 
 
 def _create_surface_points_from_mesh_list(meshes_filepaths_list: list, clustered_data: ClusteredCenterPointsAllFrames,
-                                          num_surface_points: int):
+                                          num_surface_points: int) -> SurfacePointsFrameList:
     """
     Create surface points for each mesh in the list.
 
@@ -158,7 +160,8 @@ def _create_surface_points_from_mesh_list(meshes_filepaths_list: list, clustered
 
         # append both values to list with names in the list
         surface_data_list.append(
-            SurfacePointsFrame.create_instance(surface_points=surface_points, surface_labels=surface_labels, time=None, mesh=mesh, centers_points=centers_points_frame))
+            SurfacePointsFrame.create_instance(surface_points=surface_points, surface_labels=surface_labels, mesh=mesh,
+                                               centers_points=centers_points_frame))
 
     return surface_data_list
 
@@ -170,6 +173,10 @@ def _prepare_surface_data(meshes_filepaths_list, clustered_data, num_surface_poi
 
     surface_data_list.assign_time_to_all_elements()
     surface_data_list.normalize_all_elements()
+    #surface_data_list.compute_centers_pca_aproximations()
+
+
+
 
     return surface_data_list
 
@@ -297,8 +304,8 @@ def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_fo
     return surface_data_list
 
 
-def _save_surface_data(clustered_data: ClusteredCenterPointsAllFrames, num_surface_points, meshes_folder_path,
-                       surface_data_filepath):
+def _create_save_surface_data(clustered_data: ClusteredCenterPointsAllFrames, num_surface_points, meshes_folder_path,
+                              surface_data_filepath):
     surface_data_list = _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path)
 
     # save the surface data list
@@ -313,7 +320,7 @@ def process_surface_data(num_surface_points, meshes_folder_path, surface_data_fi
         if clustered_centers is None:
             logging.error("Clustered data could not be loaded. Exiting.")
             return
-        _save_surface_data(clustered_centers, num_surface_points, meshes_folder_path, surface_data_filepath)
+        _create_save_surface_data(clustered_centers, num_surface_points, meshes_folder_path, surface_data_filepath)
         logging.info("Neural network data processed and saved.")
     else:
         logging.info("Neural network data already processed.")

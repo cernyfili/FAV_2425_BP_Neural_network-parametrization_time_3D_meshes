@@ -1,5 +1,6 @@
 import logging
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 
 from data_processing.class_mapping import SurfacePointsFrameList
+from nerual_network.data_structures import LossFunctionInfo
 from src.nerual_network.class_model import NNDataset
 from src.utils.helpers import load_pickle_file
 from utils.constants import NN_DEVICE_STR, TrainConfig
@@ -89,7 +91,7 @@ def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: 
 
 
 # Function to evaluate the model on the validation set
-def _evaluate(model, val_loader, loss_function, device, loss_function_info):
+def _evaluate(model, val_loader, loss_function, device, loss_function_info : LossFunctionInfo):
     model.eval()  # Set model to evaluation mode
     val_loss = 0
     # with torch.no_grad():
@@ -112,7 +114,6 @@ def _save_checkpoint(model, optimizer, epoch, val_loss):
     }
 # endregion
 
-
 # Function to train the neural network for each cluster
 def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, train_config : TrainConfig):
     max_epochs = train_config.nn_config.max_epochs
@@ -124,7 +125,16 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, train_
     logging.info("Starting Training Neural network")
     # Identify unique clusters in the data
     unique_clusters = surface_data_list.get_unique_clusters()
-    meshes_list = surface_data_list.get_meshes_list()
+    meshes_list = surface_data_list.get_normalized_meshes_list()
+
+    loss_function_info = LossFunctionInfo()
+    loss_function_info.meshes_list = meshes_list
+    loss_function_info.device = torch.device(NN_DEVICE_STR)
+    loss_function_info.time_list = surface_data_list.get_time_list()
+    loss_function_info.data = surface_data_list
+
+    all_frames_closest_list = surface_data_list.create_all_frames_all_points_closest_centers_indices()
+    loss_function_info.closest_centers_indicies_all_frames = np.array(all_frames_closest_list, dtype=int)
 
     for cluster in unique_clusters:
         # Filter data for the current cluster
@@ -136,13 +146,13 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, train_
         logging.info(f"--------------------Training neural network for cluster {cluster}...")
 
         # Train the neural network on the current cluster's data
-        _train_neural_network(data=surface_data_cluster, model_save_path=model_weights_filepath,
-                              meshes_list=meshes_list, train_config=train_config)
+        _train_neural_network(data_cluster=surface_data_cluster, model_save_path=model_weights_filepath,
+                              loss_function_info=loss_function_info, train_config=train_config)
 
         logging.info(f"Model weights for cluster {cluster} saved to {model_weights_filepath}")
 
 # Main training function with early stopping and scheduler
-def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_list, train_config: TrainConfig):
+def _train_neural_network(data_cluster: SurfacePointsFrameList, model_save_path, loss_function_info : LossFunctionInfo, train_config: TrainConfig):
     device = torch.device(NN_DEVICE_STR)
     logging.info(f"Using device: {device}")
 
@@ -153,9 +163,7 @@ def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_
     # if not data.is_normalized:
     #     logging.warning("Data is not normalized. Neural network training may not be effective.")
 
-    time_list = data.get_time_list()
-
-    train_loader, val_loader = _create_data_loaders(data, batch_size)
+    train_loader, val_loader = _create_data_loaders(data_cluster, batch_size)
 
     model, optimizer, loss_function = init_training_config(train_config)
 
@@ -166,7 +174,8 @@ def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_
     epochs_no_improve = 0
     best_epoch = 0
     best_checkpoint = None
-    loss_function_info = {'meshes_list': meshes_list, 'device': device, 'time_list': time_list, 'data': data}
+
+    loss_function_info.data_cluster = data_cluster
 
     for epoch in range(1, num_epochs + 1):
         # Train and evaluate for one epoch
@@ -199,7 +208,7 @@ def _train_neural_network(data: SurfacePointsFrameList, model_save_path, meshes_
     logging.info(f"Training completed. Best model saved to {model_save_path}")
 
 # Function to perform one training epoch
-def _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info):
+def _train_one_epoch(model, train_loader, loss_function, optimizer, device, loss_function_info : LossFunctionInfo):
     model.to(device)
     model.train()  # Set model to training mode
     train_loss = 0
@@ -235,7 +244,7 @@ def train_nn(train_config: TrainConfig):
     logging.info(f"Loss function: {loss_function}")
 
     surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
-    if surface_data_list is None or surface_data_list.list is None or not isinstance(surface_data_list,
+    if surface_data_list is None or surface_data_list.public_list is None or not isinstance(surface_data_list,
                                                                                      SurfacePointsFrameList):
         logging.error("Surface data list could not be loaded. Exiting.")
         return

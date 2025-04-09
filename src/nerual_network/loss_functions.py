@@ -14,9 +14,9 @@ import numpy as np
 import torch
 from torch import nn, tensor
 
-from data_processing.class_mapping import TimeFrame, MeshList, CentersInfo, compute_distances_from_centers, \
-    SurfacePointsFrame, SurfacePointsFrameList
+from data_processing.class_mapping import TimeFrame, MeshList, CentersInfo, SurfacePointsFrame, SurfacePointsFrameList
 from nerual_network.class_model import NNDataset
+from nerual_network.data_structures import LossFunctionInfo
 from utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_STD, CDataPreprocessing
 
 
@@ -260,9 +260,9 @@ def loss_function_chamfer(inputs, targets, model, loss_info):
 
         return decoded_mesh_v, original_mesh_f, original_mesh_v
 
-    meshes_list = loss_info['meshes_list']
-    device = loss_info['device']
-    time_list: list[TimeFrame] = loss_info['time_list']
+    meshes_list = loss_info.meshes_list
+    device = loss_info.device
+    time_list: list[TimeFrame] = loss_info.time_list
 
     decoded_mesh_v, original_mesh_f, original_mesh_v = __prepare_data(device, inputs, model, meshes_list, time_list)
     # Compute one-way Chamfer Distance loss
@@ -284,8 +284,8 @@ def loss_function_chamfer(inputs, targets, model, loss_info):
 def loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info):
     select_function = __select_unique_time
 
-    meshes_list = loss_info['meshes_list']
-    device = loss_info['device']
+    meshes_list = loss_info.meshes_list
+    device = loss_info.device
 
     decoder_data = _get_decoder_input_data(device, inputs, model)
     loss_chamfer_list = __compute_loss_chamfer_distance_with_time_tensor(decoder_data=decoder_data,
@@ -358,15 +358,15 @@ def loss_function_uv_streach(inputs, targets, model, loss_info):
 
 # region LOSS FUNCTION CENTERS
 def __compute_center_distance_loss(input_points: torch.Tensor, decoded_points: torch.Tensor,
-                                   closest_centers_indices: list[list], input_centers_info: CentersInfo,
-                                   decoded_centers_info: CentersInfo) -> torch.tensor:
+                                   closest_centers_indices_to_points: np.ndarray, centers_points_at_input_time: CentersInfo,
+                                   centers_points_at_decoded_time: CentersInfo) -> torch.tensor:
     """
 
     :param input_points: tensor with 3 columns (x, y, z)
     :param decoded_points:  tensor with 3 columns (x, y, z)
-    :param closest_centers_indices: indexes of closest centers to input_points
-    :param input_centers_info: centers info in input_points time
-    :param decoded_centers_info: centers info in decoded_points time
+    :param closest_centers_indices_to_points: indexes of closest centers to input_points
+    :param centers_points_at_input_time: centers info in input_points time
+    :param centers_points_at_decoded_time: centers info in decoded_points time
     :return:
     """
 
@@ -387,38 +387,45 @@ def __compute_center_distance_loss(input_points: torch.Tensor, decoded_points: t
     if len(input_points) != len(decoded_points):
         raise ValueError("Length of input_points and decoded_data must be the same")
     len_points = len(input_points)
-    if len(closest_centers_indices) != len_points:
+    if len(closest_centers_indices_to_points) != len_points:
         raise ValueError("Length of closest_centers and input_points must be the same")
 
     if input_points.shape[1] != 3:
         raise ValueError("Input points must have 3 columns")
     if decoded_points.shape[1] != 3:
         raise ValueError("Decoded data must have 3 columns")
+
+    # cloest_center_indices
+    if closest_centers_indices_to_points is None:
+        raise ValueError("Closest centers indices are empty.")
+    if closest_centers_indices_to_points.shape[1] != CDataPreprocessing.NUM_CLOSEST_CENTERS_TO_POINT:
+        raise ValueError("Closest centers indices must have 3 columns.")
     # endregion
 
     num_closest_centers = CDataPreprocessing.NUM_CLOSEST_CENTERS_TO_POINT
 
     # make tensor from list of lists to list with only one element
-    closest_centers_indices_tensor = torch.tensor(closest_centers_indices, device=input_points.device)
+    closest_centers_indices_tensor = torch.tensor(closest_centers_indices_to_points, device=input_points.device)
     """ """
 
-    all_input_centers_points = input_centers_info.points
+    all_input_centers_points = centers_points_at_input_time.points
     all_input_centers_points = torch.tensor(all_input_centers_points, device=input_points.device)
     input_centers_points = all_input_centers_points[closest_centers_indices_tensor]
     """ points of closest centers (with indexes closest_center_indices) to input_points in input time """
 
-    all_decoded_centers_points = decoded_centers_info.points
+    all_decoded_centers_points = centers_points_at_decoded_time.points
     all_decoded_centers_points = torch.tensor(all_decoded_centers_points, device=input_points.device)
     decoded_centers_points = all_decoded_centers_points[closest_centers_indices_tensor]
     """ points of closest centers (with indexes closest_center_indices) to decoded_points in decoded time """
 
-    input_centers_distances = compute_distances_from_centers(points=input_points,
-                                                             closest_centers_points=input_centers_points,
-                                                             num_closest_centers=num_closest_centers)
+    if input_centers_points.shape != decoded_centers_points.shape:
+        raise ValueError("Input centers points and decoded centers points must have the same number of columns")
 
-    decoded_centers_distances = compute_distances_from_centers(points=decoded_points,
-                                                               closest_centers_points=decoded_centers_points,
-                                                               num_closest_centers=num_closest_centers)
+    input_centers_distances = compute_distances_from_point_to_multiple_centers(points=input_points,
+                                                                               closest_centers_points=input_centers_points)
+
+    decoded_centers_distances = compute_distances_from_point_to_multiple_centers(points=decoded_points,
+                                                                                 closest_centers_points=decoded_centers_points)
 
     # check
     if input_centers_distances.shape != decoded_centers_distances.shape:
@@ -434,11 +441,10 @@ def __compute_center_distance_loss(input_points: torch.Tensor, decoded_points: t
     return loss
 
 
-def __compute_loss_function_centers(inputs, targets, model, loss_info) -> list:
+def __compute_loss_function_centers(inputs, model, loss_info : LossFunctionInfo) -> list:
     """
 
     :param inputs: where columns mean (x_value, y_value, z_value, time_value, time_index, point_index)
-    :param targets:
     :param model:
     :param loss_info:
     :return:
@@ -446,32 +452,29 @@ def __compute_loss_function_centers(inputs, targets, model, loss_info) -> list:
 
     # region INLINE FUNCTIONS
 
-    def get_closest_centers_indicies(data_at_input_time : SurfacePointsFrame, inputs_points_index_column : list[int]):
+    # def get_closest_centers_indicies(data_at_input_time : SurfacePointsFrame, inputs_points_index_column : list[int]):
+    #
+    #     input_all_labeled_points = data_at_input_time.normalized_labeled_points_list
+    #     filtered_input_labeled_points = input_all_labeled_points.filter_by_points_indices(inputs_points_index_column)
+    #
+    #     closest_centers_points_list = filtered_input_labeled_points.get_closest_centers()
+    #     closest_centers_indices = [element.get_centers_indices() for element in closest_centers_points_list]
+    #     """ indexes of closest centers to input_points """
+    #     if len(closest_centers_indices) != len(inputs_points_index_column):
+    #         raise ValueError("Length of closest_centers_indices and input_points must be the same")
+    #     return closest_centers_indices
 
-        input_all_labeled_points = data_at_input_time.labeled_points_list
-        filtered_input_labeled_points = input_all_labeled_points.filter_by_points_indices(inputs_points_index_column)
-
-        closest_centers_points_list = filtered_input_labeled_points.get_closest_centers()
-        closest_centers_indices = [element.get_centers_indices() for element in closest_centers_points_list]
-        """ indexes of closest centers to input_points """
-        if len(closest_centers_indices) != len(inputs_points_index_column):
-            raise ValueError("Length of closest_centers_indices and input_points must be the same")
-        return closest_centers_indices
-
-    data: SurfacePointsFrameList = loss_info['data']
-    time_list = loss_info['time_list']  # list of TimeFrame
-
-
+    data: SurfacePointsFrameList = loss_info.data
+    time_list = loss_info.time_list  # list of TimeFrame
 
     # region Decoded data
     decoder_time = np.random.choice(time_list)
 
-    # VAR decoded_centers_info - get all center points from decoded time
-    decoded_original_data = data.get_element_by_time_index(decoder_time.index)
-    decoded_centers_info = decoded_original_data.centers_info
+    # VAR centers_points_at_decoded_time - get all center points from decoded time
+    data_frame_at_decoded_time = data.get_element_by_time_index(decoder_time.index)
+    centers_points_at_decoded_time = data_frame_at_decoded_time.normalized_centers_info
 
     # endregion
-
 
     unique_time_elements = NNDataset.get_unique_time_indices_list(inputs)
     loss_list = []
@@ -485,31 +488,29 @@ def __compute_loss_function_centers(inputs, targets, model, loss_info) -> list:
         # VAR decoded_points - decoded points from decoder_time
         decoded_points = _run_throuh_nn_at_decoder_time(inputs_at_time, model, decoder_time)
 
-        data_at_input_time = data.get_element_by_time_index(input_time_index)
-
         # VAR closest_centers_indices - get closest centers to input points
         inputs_points_index_column = NNDataset.get_point_indices_column(inputs_at_time)
-        # convert to list of int
         inputs_points_index_column = [int(element) for element in inputs_points_index_column]
-        closest_centers_indices = get_closest_centers_indicies(data_at_input_time, inputs_points_index_column)
+        closest_centers_indices = loss_info.closest_centers_indicies_all_frames[input_time_index][inputs_points_index_column]
 
         # VAR input_centers_info - get all center points from input time
-        input_centers_info = data_at_input_time.centers_info
-        if not input_centers_info:
+        data_frame_at_input_time = data.get_element_by_time_index(input_time_index)
+        centers_points_at_input_time = data_frame_at_input_time.normalized_centers_info
+        if not centers_points_at_input_time:
             raise ValueError("Input data must have centers info")
 
 
         loss_distances = __compute_center_distance_loss(input_points=inputs_points, decoded_points=decoded_points,
-                                                        closest_centers_indices=closest_centers_indices,
-                                                        input_centers_info=input_centers_info,
-                                                        decoded_centers_info=decoded_centers_info)
+                                                        closest_centers_indices_to_points=closest_centers_indices,
+                                                        centers_points_at_input_time=centers_points_at_input_time,
+                                                        centers_points_at_decoded_time=centers_points_at_decoded_time)
         loss_list.append(loss_distances)
 
     return loss_list
 
 
 def loss_function_centers(inputs, targets, model, loss_info):
-    loss_centers_list = __compute_loss_function_centers(inputs, targets, model, loss_info)
+    loss_centers_list = __compute_loss_function_centers(inputs, model, loss_info)
     loss_centers = torch.stack(loss_centers_list).mean()
     batch_size = inputs.size(0)
     loss_centers = loss_centers
@@ -523,6 +524,26 @@ def loss_function_centers(inputs, targets, model, loss_info):
 # endregion
 
 
+# region LOSS FUNCTION PCA PREPROCESS
+
+class LossFunctionPCAPrepocess():
+    def __init__(self):
+        pass
+
+    def __compute_loss_pca_preprocess(self, inputs, targets, model, data : SurfacePointsFrameList):
+        # #compute loss
+        # loss = loss_function_standard(inputs, targets, model, loss_info)
+        # return loss
+        pass
+
+    def __call__(self, inputs, targets, model, loss_info):
+        data : SurfacePointsFrameList = loss_info.data_cluster
+        loss = self.__compute_loss_pca_preprocess(inputs, targets, model, data)
+        return loss
+
+# endregion
+
+
 LOSS_FUNCTIONS_LIST: dict[str: callable] = {
     'standard': loss_function_standard,
     'chamfer': loss_function_chamfer,
@@ -530,3 +551,33 @@ LOSS_FUNCTIONS_LIST: dict[str: callable] = {
     'uv_streach': loss_function_uv_streach,
     'centers': loss_function_centers
 }
+
+
+def compute_distances_from_point_to_multiple_centers(points: torch.Tensor, closest_centers_points: torch.Tensor) -> torch.Tensor:
+    # region SANITY CHECKS
+    if points is None:
+        raise AssertionError("Points are empty.")
+    # check if points elements shape is (x,y,z) and it is float numbers
+    if points.shape[1] != 3:
+        raise AssertionError("Points must have 3 coordinates.")
+
+    if closest_centers_points is None:
+        raise AssertionError("Centers points are empty.")
+    # check if centers_points elements shape is (x,y,z) and it is float numbers
+    if closest_centers_points.shape[2] != 3:
+        raise AssertionError("Centers points must have 3 coordinates.")
+
+    if closest_centers_points.shape[0] != points.shape[0]:
+        raise AssertionError("Centers points must have the same number of points")
+
+    # endregion
+
+    num_closest_centers = closest_centers_points.shape[1]
+
+
+    # compute distances
+    points_in_row = points.unsqueeze(1).repeat(1, num_closest_centers, 1).view(-1, 3)
+    closest_centers_points_in_row = closest_centers_points.view(-1, 3)
+    distances_tensor = torch.norm(points_in_row - closest_centers_points_in_row, dim=1)
+
+    return distances_tensor

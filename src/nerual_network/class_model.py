@@ -12,16 +12,16 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
+
 class NNDataset(Dataset):
     def __init__(self, surface_data_list: SurfacePointsFrameList):
         if surface_data_list is None:
             raise ValueError("surface_data_list must not be None")
 
         self.data = []
-        for surface_data in surface_data_list.list:
-            points_all = surface_data.points_list
+        for surface_data in surface_data_list.public_list:
+            points_all = surface_data.normalized_points_list
             points_all = np.array(points_all)
-
 
             time_values = np.full((points_all.shape[0], 1), surface_data.time.value)
             time_index = np.full((points_all.shape[0], 1), surface_data.time.index)
@@ -37,37 +37,37 @@ class NNDataset(Dataset):
 
     def __getitem__(self, idx):
         # Separate data based on the target and input requirements
-        targets = self.data[idx, :3]   # First 3 columns as targets
-        inputs = self.data[idx]    # All columns as inputsis
+        targets = self.data[idx, :3]  # First 3 columns as targets
+        inputs = self.data[idx]  # All columns as inputsis
         return inputs, targets
 
     @staticmethod
-    def get_time_indices_column(input_tensor : torch.Tensor) -> torch.Tensor:
+    def get_time_indices_column(input_tensor: torch.Tensor) -> torch.Tensor:
         return input_tensor[:, 4].unsqueeze(1)
 
     @staticmethod
-    def get_time_values_column(input_tensor : torch.Tensor) -> torch.Tensor:
+    def get_time_values_column(input_tensor: torch.Tensor) -> torch.Tensor:
         return input_tensor[:, 3].unsqueeze(1)
 
     @staticmethod
-    def get_point_indices_column(input_tensor : torch.Tensor) -> torch.Tensor:
+    def get_point_indices_column(input_tensor: torch.Tensor) -> torch.Tensor:
         return input_tensor[:, 5].unsqueeze(1)
 
     @staticmethod
-    def get_encoder_input(input_tensor : torch.Tensor) -> torch.Tensor:
+    def get_encoder_input(input_tensor: torch.Tensor) -> torch.Tensor:
         return input_tensor[:, :4]
-    
+
     @staticmethod
-    def get_points_columns(input_tensor : torch.Tensor) -> torch.Tensor:
+    def get_points_columns(input_tensor: torch.Tensor) -> torch.Tensor:
         return input_tensor[:, :3]
 
     @staticmethod
-    def get_unique_time_indices_list(input_tensor : torch.Tensor) -> torch.Tensor:
+    def get_unique_time_indices_list(input_tensor: torch.Tensor) -> torch.Tensor:
         time_indices = NNDataset.get_time_indices_column(input_tensor)
         return torch.unique(time_indices)
 
     @staticmethod
-    def filter_by_time_index(input_tensor : torch.Tensor, time_index : int) -> torch.Tensor:
+    def filter_by_time_index(input_tensor: torch.Tensor, time_index: int) -> torch.Tensor:
         time_indices = NNDataset.get_time_indices_column(input_tensor)
         # convert time_indices to a int tensor
         time_indices = time_indices.int()
@@ -77,13 +77,17 @@ class NNDataset(Dataset):
         return return_tensor
 
     @staticmethod
-    def split_by_time_value(input_tensor : np.ndarray) -> list[np.ndarray]:
+    def split_by_time_value(input_tensor: np.ndarray) -> list[np.ndarray]:
         time_indices = input_tensor[:, 3]
         unique_time_indices = np.unique(time_indices)
         return [input_tensor[time_indices == time_index] for time_index in unique_time_indices]
 
 
 class Simple_MLP_01(nn.Module):
+    """
+    deprecated not use
+    """
+
     def __init__(self):
         super(Simple_MLP_01, self).__init__()
         self.encoder = nn.Sequential(
@@ -93,7 +97,13 @@ class Simple_MLP_01(nn.Module):
             nn.ReLU(),
             nn.Linear(32, 2)
         )
-        self.decoder = nn.Sequential(nn.Linear(3, 32), nn.ReLU(), nn.Linear(32, 64), nn.ReLU(), nn.Linear(64, 4))
+        self.decoder = nn.Sequential(
+            nn.Linear(3, 32),
+            nn.ReLU(),
+            nn.Linear(32, 64),
+            nn.ReLU(),
+            nn.Linear(64, 3)
+        )
 
     def forward(self, x):
         time_value = x[:, 3].unsqueeze(1)  # Extract time value and keep it as a column vector
@@ -102,11 +112,13 @@ class Simple_MLP_01(nn.Module):
         decoded_output = self.decoder(encoded_with_time)
         return decoded_output
 
+
 class Simple_MLP_02(nn.Module):
     """
     Changes:
     - Added an extra layer to the encoder and decoder
     """
+
     def __init__(self):
         super(Simple_MLP_02, self).__init__()
 
@@ -164,12 +176,14 @@ class Simple_MLP_02(nn.Module):
 
         return decoded_output
 
+
 class Simple_MLP_03(nn.Module):
     """
     Changes:
     - at the end of encoder added Tanh activation function
     used for loss function: uv streach
     """
+
     def __init__(self):
         super(Simple_MLP_03, self).__init__()
 
@@ -231,12 +245,14 @@ class Simple_MLP_03(nn.Module):
 
         return decoded_output
 
+
 class Simple_MLP_04(nn.Module):
     """
     Changes:
     - simplier architecture to reduce overfitting
     used for loss function: centers
     """
+
     def __init__(self):
         super(Simple_MLP_04, self).__init__()
 
