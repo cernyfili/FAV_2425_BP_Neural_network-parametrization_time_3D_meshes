@@ -12,15 +12,23 @@ from torch import optim, nn
 
 from nerual_network.class_model import Simple_MLP_04, Simple_MLP_01, Simple_MLP_02
 from nerual_network.loss_functions import LOSS_FUNCTIONS_LIST
-from utils.constants import TrainConfig
+from nerual_network.class_model import MODELS_LIST
+from utils.constants import TrainConfig, ModelType
 
 
 # Configuration function to initialize model, optimizer, and criterion
 def init_training_config(train_config: TrainConfig) -> (nn.Module, optim.Optimizer, nn.Module):
     nn_lr = train_config.nn_config.nn_lr
-    loss_function_name = train_config.nn_config.loss_function_name
+    loss_function_type = train_config.nn_config.loss_function_type
+    model_type = train_config.nn_config.model_type
 
-    model = Simple_MLP_02()
+    model = init_model(model_type)
     optimizer = optim.Adam(model.parameters(), lr=nn_lr)
-    loss_function = LOSS_FUNCTIONS_LIST[loss_function_name]
+    loss_function = LOSS_FUNCTIONS_LIST[loss_function_type]
     return model, optimizer, loss_function
+
+def init_model(model_type: ModelType) -> nn.Module:
+    """
+    Initialize the model based on the model type.
+    """
+    return MODELS_LIST[model_type]()

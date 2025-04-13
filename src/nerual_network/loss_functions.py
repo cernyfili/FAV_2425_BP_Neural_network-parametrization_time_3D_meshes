@@ -14,10 +14,10 @@ import numpy as np
 import torch
 from torch import nn, tensor
 
-from data_processing.class_mapping import TimeFrame, MeshList, CentersInfo, SurfacePointsFrame, SurfacePointsFrameList
+from data_processing.class_mapping import TimeFrame, MeshList, CentersInfo, SurfacePointsFrame, SurfacePointsFrameList, \
+    LossFunctionInfo
 from nerual_network.class_model import NNDataset
-from nerual_network.data_structures import LossFunctionInfo
-from utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_STD, CDataPreprocessing
+from utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_STD, CDataPreprocessing, LossFunctionType
 
 
 # region PRIVATE FUNCTIONS
@@ -30,21 +30,21 @@ def _add_time_column(encoded_features, time_value):
     return encoded_with_time
 
 
-def __get_random_time(inputs: torch.Tensor) -> tuple[float, int]:
-    # Extract the time value column (assuming it's the 4th column)
-    time_value_column = inputs[:, 3]
-
-    # Extract the time index column (assuming it's the 5th column)
-    time_index_column = inputs[:, 4]
-
-    # Select a random index
-    random_index = torch.randint(0, time_value_column.size(0), (1,)).item()
-
-    # Retrieve the time value and time index at the selected index
-    random_time_value = time_value_column[random_index].item()
-    random_time_index = time_index_column[random_index].item()
-
-    return random_time_value, int(random_time_index)
+# def __get_random_time(inputs: torch.Tensor) -> tuple[float, int]:
+#     # Extract the time value column (assuming it's the 4th column)
+#     time_value_column = inputs[:, 3]
+#
+#     # Extract the time index column (assuming it's the 5th column)
+#     time_index_column = inputs[:, 4]
+#
+#     # Select a random index
+#     random_index = torch.randint(0, time_value_column.size(0), (1,)).item()
+#
+#     # Retrieve the time value and time index at the selected index
+#     random_time_value = time_value_column[random_index].item()
+#     random_time_index = time_index_column[random_index].item()
+#
+#     return random_time_value, int(random_time_index)
 
 
 def __select_unique_time(time_tensor: torch.Tensor) -> torch.Tensor:
@@ -75,24 +75,24 @@ def __select_most_common_time_values(time_value_tensor: torch.Tensor, num_values
     # Return the two most common values
     return top_two_indices
 
-
-def _get_time_tensor_from_input(inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    # Extract the time value column (assuming it's the 4th column)
-    time_value_column = inputs[:, 3]
-
-    # Extract the time index column (assuming it's the 5th column)
-    time_index_column = inputs[:, 4]
-
-    # generate tensor of with 2 columns where you randomly select time values from time_value_column and add corresponding time_index
-    # random_index = torch.randint(0, time_value_column.size(0), (1,)).item()
-    # random_time_value_tensor = time_value_column[random_index]
-    #
-    # # Retrieve the time value and time index at the selected index
-    # random_time_index_tensor = time_index_column[random_index]
-    time_value_tensor = time_value_column
-    time_index_tensor = time_index_column
-
-    return time_value_tensor, time_index_tensor
+#
+# def _get_time_tensor_from_input(inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+#     # Extract the time value column (assuming it's the 4th column)
+#     time_value_column = inputs[:, 3]
+#
+#     # Extract the time index column (assuming it's the 5th column)
+#     time_index_column = inputs[:, 4]
+#
+#     # generate tensor of with 2 columns where you randomly select time values from time_value_column and add corresponding time_index
+#     # random_index = torch.randint(0, time_value_column.size(0), (1,)).item()
+#     # random_time_value_tensor = time_value_column[random_index]
+#     #
+#     # # Retrieve the time value and time index at the selected index
+#     # random_time_index_tensor = time_index_column[random_index]
+#     time_value_tensor = time_value_column
+#     time_index_tensor = time_index_column
+#
+#     return time_value_tensor, time_index_tensor
 
 
 def _run_through_encoder(inputs, encoder):
@@ -111,31 +111,26 @@ def _run_through_decoder_at_time(encoded_output : torch.tensor, decoder : callab
     return decoder_output
 
 
-def _run_throuh_nn_at_decoder_time(inputs : torch.tensor, model : callable, decoder_time: TimeFrame) -> torch.tensor:
+def run_through_nn_at_decoder_time(inputs : torch.tensor, model : callable, decoder_time: TimeFrame) -> torch.tensor:
     encoder_output_data = _run_through_encoder(inputs, model.encoder)
     decoder_output_data = _run_through_decoder_at_time(encoder_output_data, model.decoder, decoder_time)
     return decoder_output_data
 
+def run_through_nn_at_same_time(inputs : torch.tensor, model : callable) -> torch.tensor:
+    encoder_output_data = _run_through_encoder(inputs, model.encoder)
 
-def _get_decoder_input_data(device, inputs, model):
-    encoded_data = _run_through_encoder(inputs, model.encoder)
+    time_column = NNDataset.get_time_values_column(inputs)
+    encoder_output_data_with_time = torch.cat((encoder_output_data, time_column), dim=1)
 
-    # select one random time from inputs
-    time_value_tensor, time_index_tensor = _get_time_tensor_from_input(inputs)
+    decoder_output_data = model.decoder(encoder_output_data_with_time)
 
-    # add time_value_tensor to encoded features
-    decoder_input_data = torch.cat((encoded_data, time_value_tensor.unsqueeze(1)), dim=1).to(device)
+    return decoder_output_data
 
-    # add time_index_tensor to decoder_input_data
-    decoder_input_data = torch.cat((decoder_input_data, time_index_tensor.unsqueeze(1)), dim=1).to(device)
-
-    return decoder_input_data
 # endregion
 
 
 def loss_function_standard(inputs, targets, model, loss_info):
-    model_input_data = NNDataset.get_encoder_input(inputs)
-    outputs = model(model_input_data)
+    outputs = run_through_nn_at_same_time(inputs, model)
     loss = nn.MSELoss()(outputs, targets)
     return loss
 
@@ -195,8 +190,8 @@ def __compute_loss_one_way_chamfer_distance(original_mesh_v: np, original_mesh_f
     return mse_loss
 
 
-def __compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor, meshes_list: MeshList, decoder,
-                                                     select_times_function: callable) -> list[tensor]:
+def __compute_loss_chamfer_distance_with_time_tensor(inputs: torch.Tensor, meshes_list: MeshList, model,
+                                                     select_times_function: callable, time_list : list[TimeFrame]) -> list[tensor]:
     """
 
     :param decoder_data: tensor 4 columns [x_value, y_value, time_value, time_index]
@@ -205,25 +200,32 @@ def __compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor,
     :param select_times_function:
     :return:
     """
+    time_list_dict = {time.index: time for time in time_list}
+
+    encoded_features = _run_through_encoder(inputs, model.encoder)
+
+    time_index_tensor = NNDataset.get_time_indices_column(inputs)
+
+    if encoded_features.shape[0] != time_index_tensor.shape[0]:
+        raise ValueError("Encoded features and time index tensor must have the same number of rows")
+
     # for each unique time in decoder_input_data run this throug decoder and then find with coresponding index from time_index_tensor where
     # decoder_input_data 3th column is equal to time_index_tensor and then coresponding mesh from meshes_list with that index and compute chamfer distance
 
     loss_list = []
 
-    time_index_tensor = decoder_data[:, 3]
     # get unique time values from decoder_input_data from 3th column
     time_index_selection = select_times_function(time_index_tensor)
 
     # for each unique time value
     for time_index in time_index_selection:
         # get all rows where 4th column is equal to time_value
-        decoder_data_select_time_index = decoder_data[decoder_data[:, 3] == time_index]
+        filtered_encoded_features = encoded_features[time_index_tensor == time_index]
 
         meshe = meshes_list.get_mesh_by_time_index(int(time_index))
 
-        # run decoder on decoder_data_time_value
-        decoder_input_data_time_value = decoder_data_select_time_index[:, :3]  # remove last column (time_index)
-        decoded_mesh_v = decoder(decoder_input_data_time_value)
+
+        decoded_mesh_v = _run_through_decoder_at_time(encoded_output=filtered_encoded_features, decoder= model.decoder, time=time_list_dict[time_index])
 
         # Compute one-way Chamfer Distance loss
         loss_chamfer = __compute_loss_one_way_chamfer_distance(original_mesh_v=meshe.vertices,
@@ -236,25 +238,17 @@ def __compute_loss_chamfer_distance_with_time_tensor(decoder_data: torch.Tensor,
 
 
 def loss_function_chamfer(inputs, targets, model, loss_info):
-    def __get_random_time_from_time_list(time_list: list[TimeFrame]) -> tuple[float, int]:
+    def __get_random_time_from_time_list(time_list: list[TimeFrame]) -> TimeFrame:
         random_time_element = np.random.choice(time_list)
-        return random_time_element.value, random_time_element.index
+        return random_time_element
 
-    def __prepare_data(device, inputs, model, meshes_list: MeshList, time_list: list[TimeFrame]):
+    def __prepare_data(inputs, model, meshes_list: MeshList, time_list: list[TimeFrame]):
         # select one random time from inputs
-        time_value, time_index = __get_random_time_from_time_list(time_list)
+        time_frame = __get_random_time_from_time_list(time_list)
 
-        # remove last columen (time_index) from inputs
-        inputs_encoder = NNDataset.get_encoder_input(inputs)
+        decoded_mesh_v = run_through_nn_at_decoder_time(inputs, model, time_frame)
 
-        # Forward pass: Encoder and Decoder
-        encoded = model.encoder(inputs_encoder)
-
-        decoder_input_data = _add_time_column(encoded_features=encoded, time_value=time_value)
-
-        decoded_mesh_v = model.decoder(decoder_input_data)  # Decodes to 3D
-
-        selected_mesh = meshes_list.get_mesh_by_time_index(time_index)
+        selected_mesh = meshes_list.get_mesh_by_time_index(time_frame.index)
         original_mesh_v = selected_mesh.vertices
         original_mesh_f = selected_mesh.faces
 
@@ -264,7 +258,7 @@ def loss_function_chamfer(inputs, targets, model, loss_info):
     device = loss_info.device
     time_list: list[TimeFrame] = loss_info.time_list
 
-    decoded_mesh_v, original_mesh_f, original_mesh_v = __prepare_data(device, inputs, model, meshes_list, time_list)
+    decoded_mesh_v, original_mesh_f, original_mesh_v = __prepare_data(inputs, model, meshes_list, time_list)
     # Compute one-way Chamfer Distance loss
     # original_mesh_v = torch.tensor(original_mesh_v, device=device, requires_grad=False)
     # original_mesh_f = torch.tensor(original_mesh_f, device=device, requires_grad=False)
@@ -286,12 +280,13 @@ def loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info):
 
     meshes_list = loss_info.meshes_list
     device = loss_info.device
+    time_list: list[TimeFrame] = loss_info.time_list
 
-    decoder_data = _get_decoder_input_data(device, inputs, model)
-    loss_chamfer_list = __compute_loss_chamfer_distance_with_time_tensor(decoder_data=decoder_data,
+    loss_chamfer_list = __compute_loss_chamfer_distance_with_time_tensor(inputs=inputs,
                                                                          meshes_list=meshes_list,
-                                                                         decoder=model.decoder,
-                                                                         select_times_function=select_function)
+                                                                         model=model,
+                                                                         select_times_function=select_function,
+                                                                         time_list=time_list)
 
     # compute avrage of all chamfer distances
     loss_chamfer = torch.stack(loss_chamfer_list).mean()
@@ -361,7 +356,6 @@ def __compute_center_distance_loss(input_points: torch.Tensor, decoded_points: t
                                    closest_centers_indices_to_points: np.ndarray, centers_points_at_input_time: CentersInfo,
                                    centers_points_at_decoded_time: CentersInfo) -> torch.tensor:
     """
-
     :param input_points: tensor with 3 columns (x, y, z)
     :param decoded_points:  tensor with 3 columns (x, y, z)
     :param closest_centers_indices_to_points: indexes of closest centers to input_points
@@ -486,7 +480,7 @@ def __compute_loss_function_centers(inputs, model, loss_info : LossFunctionInfo)
         inputs_points = NNDataset.get_points_columns(inputs_at_time)
 
         # VAR decoded_points - decoded points from decoder_time
-        decoded_points = _run_throuh_nn_at_decoder_time(inputs_at_time, model, decoder_time)
+        decoded_points = run_through_nn_at_decoder_time(inputs_at_time, model, decoder_time)
 
         # VAR closest_centers_indices - get closest centers to input points
         inputs_points_index_column = NNDataset.get_point_indices_column(inputs_at_time)
@@ -519,7 +513,7 @@ def loss_function_centers(inputs, targets, model, loss_info):
 
     loss = loss_centers + loss_standard
 
-    logging.info(f"Center loss: {loss_centers}, Standard loss: {loss_standard}, Combined loss: {loss}")
+    #logging.info(f"Center loss: {loss_centers}, Standard loss: {loss_standard}, Combined loss: {loss}")
     return loss
 # endregion
 
@@ -544,12 +538,12 @@ class LossFunctionPCAPrepocess():
 # endregion
 
 
-LOSS_FUNCTIONS_LIST: dict[str: callable] = {
-    'standard': loss_function_standard,
-    'chamfer': loss_function_chamfer,
-    'chamfer_better_random_dist': loss_function_chamfer_better_random_dist,
-    'uv_streach': loss_function_uv_streach,
-    'centers': loss_function_centers
+LOSS_FUNCTIONS_LIST: dict[LossFunctionType: callable] = {
+    LossFunctionType.STANDARD: loss_function_standard,
+    LossFunctionType.CHAMFER: loss_function_chamfer,
+    LossFunctionType.CHAMFER2: loss_function_chamfer_better_random_dist,
+    LossFunctionType.UV_STREACH: loss_function_uv_streach,
+    LossFunctionType.CENTERS: loss_function_centers,
 }
 
 
@@ -573,7 +567,6 @@ def compute_distances_from_point_to_multiple_centers(points: torch.Tensor, close
     # endregion
 
     num_closest_centers = closest_centers_points.shape[1]
-
 
     # compute distances
     points_in_row = points.unsqueeze(1).repeat(1, num_closest_centers, 1).view(-1, 3)

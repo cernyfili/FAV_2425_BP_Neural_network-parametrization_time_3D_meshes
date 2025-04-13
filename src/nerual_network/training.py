@@ -7,8 +7,7 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 
-from data_processing.class_mapping import SurfacePointsFrameList
-from nerual_network.data_structures import LossFunctionInfo
+from data_processing.class_mapping import SurfacePointsFrameList, LossFunctionInfo
 from src.nerual_network.class_model import NNDataset
 from src.utils.helpers import load_pickle_file
 from utils.constants import NN_DEVICE_STR, TrainConfig
@@ -124,7 +123,7 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, train_
 
     logging.info("Starting Training Neural network")
     # Identify unique clusters in the data
-    unique_clusters = surface_data_list.get_unique_clusters()
+    unique_clusters = surface_data_list.get_unique_clusters_indexes()
     meshes_list = surface_data_list.get_normalized_meshes_list()
 
     loss_function_info = LossFunctionInfo()

@@ -237,7 +237,7 @@ def main():
     processed_folderpath = os.path.join(data_folder, processed_folder)
 
     train_config = DEFAULT_TRAIN_CONFIG
-    train_config.file_path_config = FilePathConfig(
+    train_config.file_path_config = FilePathConfig.create_test_mode(
         data_foldername=DATA_FOLDERNAME,
         processed_session_folderpath=processed_session_folderpath,
         raw_folderpath=raw_folderpath,

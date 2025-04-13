@@ -1,6 +1,7 @@
 import logging
 import os
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Dict
 
 import numpy as np
 import torch
@@ -9,19 +10,20 @@ from matplotlib import pyplot as plt
 from numpy import ndarray, dtype
 from scipy.sparse import csgraph
 from scipy.sparse.linalg import eigsh
+from torch import nn
 from torch.utils.data import DataLoader
 
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
-from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame
+from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame, TimeFrame
 from data_processing.file_loader import load_centers_files
-from data_processing.mapping import categorize_points_with_labels
 from nerual_network.evaluation.class_evaluation import PairPointCenterPoint, PairPointCenterPointList, DecoderElement, \
     DecoderPairList, EvaluationResult, EvaluationResultList
+from nerual_network.loss_functions import _add_time_column, run_through_nn_at_decoder_time, run_through_nn_at_same_time
+from scripts.process_mesh_throug_model import MESH_TIME_INDEX, MeshData, process_mesh_through_model, DataVisualizer
 from src.nerual_network.class_model import NNDataset
-from utils.constants import NN_DEVICE_STR, TrainConfig
+from utils.constants import NN_DEVICE_STR, TrainConfig, ModelType
 from utils.helpers import load_pickle_file, get_meshes_list
-from utils.nn_config_utils import init_training_config
-from nerual_network.loss_functions import _add_time_column
+from utils.nn_config_utils import init_training_config, init_model
 
 
 # Restrict access to underscore-prefixed functions
@@ -29,6 +31,14 @@ def __getattr__(name):
     if name.startswith("_"):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
+
+
+class ClusterIndex(int):
+    pass
+
+
+class LoadedModelDic(Dict[ClusterIndex, nn.Module]):
+    pass
 
 
 # region PRIVATE FUNCTIONS
@@ -39,7 +49,8 @@ def _save_pointcloud_to_file(original_points_all, processed_points_all, original
 
 def _create_pointclouds_from_time_to_all_times(surface_data_list: SurfacePointsFrameList, images_save_folderpath: str,
                                                time_index: int, train_config: TrainConfig):
-    def __save_pointcloud_to_file(rgb_colors : np.ndarray, processed_points_split_by_time_value : list[np.ndarray], images_save_folderpath : str):
+    def __save_pointcloud_to_file(rgb_colors: np.ndarray, processed_points_split_by_time_value: list[np.ndarray],
+                                  images_save_folderpath: str):
         # make dir if not made
         os.makedirs(images_save_folderpath, exist_ok=True)
 
@@ -252,7 +263,7 @@ def _prepare_export_data(surface_data_list, train_config: TrainConfig):
     original_points_all = []
     processed_points_all = []
     cluster_labels = []
-    unique_clusters = surface_data_list.get_unique_clusters()
+    unique_clusters = surface_data_list.get_unique_clusters_indexes()
     for i, cluster in enumerate(unique_clusters):
         if i >= train_config.num_clusters:
             break
@@ -279,9 +290,8 @@ def _prepare_export_data(surface_data_list, train_config: TrainConfig):
             for batch in original_points_loader:
                 inputs = batch[0]  # Get only the points with time
                 inputs = inputs.float().to(device)
-                encoder_inputs = NNDataset.get_encoder_input(inputs)
 
-                outputs = model(encoder_inputs)  # Forward pass through the model
+                outputs = run_through_nn_at_same_time(inputs, model)
                 processed_points.append(outputs)
 
         # Convert processed points to a single numpy array
@@ -391,7 +401,7 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
     original_points_all = []
     processed_points_all = []
 
-    unique_clusters = surface_data_list.get_unique_clusters()
+    unique_clusters = surface_data_list.get_unique_clusters_indexes()
 
     # select original points where time is 0
     original_points_frame = surface_data_list.get_element_by_time_index(time_index)
@@ -482,45 +492,55 @@ def __convert_points_to_colors(points) -> np.ndarray:
 
     return rgb_colors
 
+@dataclass
+class VisualizationData:
+    points: np.ndarray
+    colors: np.ndarray
+    """values normalized to 0-1"""
 
-def _visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images_save_folderpath: str,
-                               time_index: int, train_config: TrainConfig):
-    def visualize_for_eachtime(rgb_colors : np.ndarray, processed_points_split_by_time_value : list[np.ndarray]):
+    def __post_init__(self):
+        if len(self.points) != len(self.colors):
+            raise ValueError("points and rgb_colors must have the same length")
+
+def save_points_with_colors(visualization_data: VisualizationData, filepath: str, axis_label: str):
+    # visualize point cloud for original point and make the color of the point based on the processed_points
+    # where the x,y,z is r,g,b values
+
+    # Create a new figure for each time slice
+
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Přidání bodů do 3D grafu
+    for i, point in enumerate(visualization_data.points):
+        ax.scatter(point[0], point[1], point[2], color=visualization_data.colors[i])
+
+    ax.set_xlabel('X Label')
+    ax.set_ylabel('Y Label')
+    ax.set_zlabel('Z Label')
+    ax.set_title(axis_label)
+    ax.legend()
+    # Save the plot for the current time slice
+
+    plt.savefig(filepath)
+    plt.close(fig)
+    print(f"Saved image at {filepath}")
+
+def visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images_save_folderpath: str,
+                              time_index: int, train_config: TrainConfig):
+    def visualize_for_eachtime(rgb_colors: np.ndarray, processed_points_split_by_time_value: list[np.ndarray]):
         # create folder if not created
         os.makedirs(images_save_folderpath, exist_ok=True)
 
         # Loop through each unique time value
-        for i, processed_points_slice in enumerate(processed_points_split_by_time_value):
-            visualize_for_one_time(images_save_folderpath, rgb_colors,
-                                   processed_points_slice,
-                                   f'time_{i}_uv_color_representation.png', time_index)
+        for time_index, processed_points_slice in enumerate(processed_points_split_by_time_value):
+            filepath = os.path.join(images_save_folderpath, f'time_{time_index}_uv_color_representation.png')
 
-    def visualize_for_one_time(images_save_folderpath, rgb_colors, processed_points_slice, image_name, time):
-        # visualize point cloud for original point and make the color of the point based on the processed_points
-        # where the x,y,z is r,g,b values
+            axis_label = f'3D Visualization of Original and Processed Points from Time {time_index}'
 
-        # Create a new figure for each time slice
+            save_points_with_colors(VisualizationData(processed_points_slice, rgb_colors), filepath, axis_label)
 
-        if processed_points_slice.shape[0] != rgb_colors.shape[0]:
-            raise Exception("Not same number of points")
 
-        fig = plt.figure(figsize=(12, 8))
-        ax = fig.add_subplot(111, projection='3d')
-
-        # Přidání bodů do 3D grafu
-        for i, point in enumerate(processed_points_slice):
-            ax.scatter(point[0], point[1], point[2], color=rgb_colors[i])
-
-        ax.set_xlabel('X Label')
-        ax.set_ylabel('Y Label')
-        ax.set_zlabel('Z Label')
-        ax.set_title(f'3D Visualization of Original and Processed Points from Time {time}')
-        ax.legend()
-        # Save the plot for the current time slice
-        image_path = os.path.join(images_save_folderpath, image_name)
-        plt.savefig(image_path)
-        plt.close(fig)
-        print(f"Saved combined surface points image at {image_path}")
 
     rgb_colors, processed_points_split_by_time_value = _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
         surface_data_list=surface_data_list, time_index=time_index, train_config=train_config)
@@ -528,8 +548,10 @@ def _visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images
 
 
 def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
-        surface_data_list: SurfacePointsFrameList, time_index: int, train_config: TrainConfig) -> tuple[np.ndarray, list[np.ndarray]]:
-    def __prepare_data_for_visualization(original_points_all: list[np.ndarray], processed_points_all: list[np.ndarray]) -> tuple[ndarray, list[np.ndarray]]:
+        surface_data_list: SurfacePointsFrameList, time_index: int, train_config: TrainConfig) -> tuple[
+    np.ndarray, list[np.ndarray]]:
+    def __prepare_data_for_visualization(original_points_all: list[np.ndarray],
+                                         processed_points_all: list[np.ndarray]) -> tuple[ndarray, list[np.ndarray]]:
         # convert original_points_all to only array of points
         original_points_list_of_points = np.vstack(original_points_all)
         # get only x, y, z from points
@@ -600,160 +622,283 @@ def _compute_variance(evaluation_results_list):
     return variance_list
 
 
-def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr):
-    """
-    Computes metrics which:
-    1. for every sequenco of points
-    1.a selects num_points from the sequence
-    2. finds closest center point loaded from files
-    3. puts original points through the encoder
-    4. puts ouput throug the decoder in every time
-    5. computes the distances between the ceneter point again
-    6. outputs statistical dispersion for every point
-    7. do this for all sequences of points
-    :param surface_data_list:
-    :param train_config:
-    :param num_points:
-    :return:
-    """
+# def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr):
+#     """
+#     Computes metrics which:
+#     1. for every sequenco of points
+#     1.a selects num_points from the sequence
+#     2. finds closest center point loaded from files
+#     3. puts original points through the encoder
+#     4. puts ouput throug the decoder in every time
+#     5. computes the distances between the ceneter point again
+#     6. outputs statistical dispersion for every point
+#     7. do this for all sequences of points
+#     :param surface_data_list:
+#     :param train_config:
+#     :param num_points:
+#     :return:
+#     """
+#
+#     def load_centers_data_from_files(folder_path, time_steps):
+#         raise NotImplementedError("Not implemented yet")
+#
+#         center_points, num_points_in_file = load_centers_files(folder_path, time_steps)
+#         # make it a Surface data list where each SurfacePoint is one num_points_in_file slice of center_points
+#
+#         # itarate over center_points and create SurfacePoint with num_points_in_file points
+#         center_points_list_current = SurfacePointsFrameList([])
+#         for i in range(0, center_points.shape[0]):
+#             center_points_list_current.append(SurfacePointsFrame(center_points[i]))
+#
+#         center_points_list_current.assign_time_to_all_elements()
+#         center_points_list_current.normalize_all_elements()
+#         return center_points_list_current
+#
+#     def compute_distance(first_point, second_point):
+#         return np.linalg.norm(first_point - second_point)
+#
+#     def find_closest_centers(center_points_list: SurfacePointsFrame, points_list: SurfacePointsFrame):
+#         pair_original_center = []
+#         index = 0
+#         for index_point, point in enumerate(points_list.normalized_points_list):
+#             closest_center_point = None
+#             min_distance = float('inf')
+#             for center_point in center_points_list.normalized_points_list:
+#                 distance = compute_distance(point, center_point)
+#                 if distance < min_distance:
+#                     closest_center_point = center_point
+#                     min_distance = distance
+#
+#             if points_list.time != center_points_list.time:
+#                 raise Exception("Not same time")
+#             time = points_list.time
+#
+#             label = points_list.labels_list[index_point]
+#
+#             pair_original_center.append(
+#                 PairPointCenterPoint(point, closest_center_point, min_distance, index + 1, time, label))
+#         return PairPointCenterPointList(pair_original_center)
+#
+#     def run_through_model(center_points_list: SurfacePointsFrameList, surface_data_list: SurfacePointsFrameList,
+#                           model_weights_template: str, batch_size: int, num_points: int, nn_lr):
+#         raise NotImplementedError("Not implemented yet")
+#
+#         # todo check if should be normalized
+#         if len(center_points_list.list) != len(surface_data_list.list):
+#             raise Exception("Not same number of center points and surface data")
+#         pair_list_len = len(surface_data_list.list)
+#
+#         unique_clusters = surface_data_list.get_unique_clusters_indexes()
+#         unique_times = surface_data_list.get_unique_times()
+#
+#         evaluation_result_list = EvaluationResultList([])
+#
+#         for i in range(0, pair_list_len):
+#
+#             # select original points where time is 0
+#             surface_data_timeframe = surface_data_list.list[i]
+#             if surface_data_timeframe.time.index != i:
+#                 raise Exception("Not same time")
+#
+#             encoder_time = surface_data_timeframe.time.value
+#
+#             center_points_timeframe = center_points_list.list[i]
+#             if center_points_timeframe.time.index != i:
+#                 raise Exception("Not same time")
+#
+#             surface_data_timeframe = surface_data_list.select_random_points(num_points)
+#
+#             pair_original_center = find_closest_centers(center_points_timeframe, surface_data_timeframe)
+#
+#             for cluster in unique_clusters:
+#
+#                 # Load the original surface points for the current cluster
+#                 pair_original_center_cluster = pair_original_center.filter_by_point_clusterlabel(cluster)
+#                 surface_data_cluster = pair_original_center_cluster.get_points_list()
+#                 surface_data_cluster = _convert_to_surfacepointsframelist(surface_data_cluster)
+#
+#                 # Create a SurfaceDataset instance with the filtered surface data
+#                 original_points_dataset = NNDataset(surface_data_cluster)
+#                 # Prepare a DataLoader for original points
+#                 original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=False)
+#
+#                 # Load the trained model for the current cluster
+#                 model_weights_filepath = model_weights_template.format(cluster=cluster)
+#                 model = _load_trained_model(model_weights_filepath, train_config)
+#                 device = torch.device(NN_DEVICE_STR)
+#
+#                 model.to(device)
+#
+#                 # Step 1: Encode the original data
+#                 with torch.no_grad():  # No need to calculate gradients during evaluation
+#                     encoded_features = model.encoder(original_points_loader)
+#
+#                 decoder_pair_list = DecoderPairList([])
+#
+#                 # iterate to decoder over all times
+#                 for decoder_time in unique_times:
+#                     # Create a tensor of the same shape as the time feature in the input
+#                     time_tensor = torch.full((encoded_features.size(0), 1), decoder_time, dtype=torch.float32)
+#                     # Concatenate the encoded features with the time tensor
+#                     encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1)
+#                     # Pass through the decoder
+#                     decoded_output = model.decoder(encoded_with_time)
+#
+#                     decoder_processed_points = decoded_output
+#                     decoder_processed_points_timeframe = SurfacePointsFrame([], None, decoder_time)
+#                     # convert to
+#                     for point in decoder_processed_points:
+#                         decoder_processed_points_timeframe.points_list.append(point)
+#
+#                     decoder_center_points_timeframe = center_points_timeframe.get_element_by_time_index(decoder_time)
+#
+#                     decoder_pair_processed_center = find_closest_centers(decoder_center_points_timeframe,
+#                                                                          decoder_processed_points_timeframe)
+#
+#                     decoder_pair_list.append(DecoderElement(decoder_pair_processed_center, decoder_time))
+#
+#                 evaluation_result_list.append(
+#                     EvaluationResult(pair_original_center_cluster, encoder_time, decoder_pair_list))
+#
+#         return evaluation_result_list
+#
+#         # load center points
+#
+#     center_points_list = load_centers_data_from_files(train_config.file_path_config.raw_data_folderpath,
+#                                                       train_config.max_time_steps)
+#     # just loads the center points from files (already loaded in surface_data_list
+#
+#     # run through the model
+#     evaluation_results_list = run_through_model(center_points_list,
+#                                                 surface_data_list,
+#                                                 train_config.file_path_config.model_weights_folderpath_template,
+#                                                 train_config.nn_config.batch_size, num_points, nn_lr)
+#
+#     variance_list = _compute_variance(evaluation_results_list)
+#
+#     return variance_list, evaluation_results_list
 
-    def load_centers_data_from_files(folder_path, time_steps):
-        raise  NotImplementedError("Not implemented yet")
-        #
-        # center_points, num_points_in_file = load_centers_files(folder_path, time_steps)
-        # # make it a Surface data list where each SurfacePoint is one num_points_in_file slice of center_points
-        #
-        # # itarate over center_points and create SurfacePoint with num_points_in_file points
-        # center_points_list_current = SurfacePointsFrameList([])
-        # for i in range(0, center_points.shape[0]):
-        #     center_points_list_current.append(SurfacePointsFrame(center_points[i]))
-        #
-        # center_points_list_current.assign_time_to_all_elements()
-        # center_points_list_current.normalize_all_elements()
-        # return center_points_list_current
 
-    def compute_distance(first_point, second_point):
-        return np.linalg.norm(first_point - second_point)
+def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: LoadedModelDic, num_points: int) -> list[
+    torch.tensor]:
+    device = torch.device(NN_DEVICE_STR)
+    clusteres_indexes_unique = data.get_unique_clusters_indexes()
 
-    def find_closest_centers(center_points_list: SurfacePointsFrame, points_list: SurfacePointsFrame):
-        pair_original_center = []
-        index = 0
-        for index_point, point in enumerate(points_list.normalized_points_list):
-            closest_center_point = None
-            min_distance = float('inf')
-            for center_point in center_points_list.normalized_points_list:
-                distance = compute_distance(point, center_point)
-                if distance < min_distance:
-                    closest_center_point = center_point
-                    min_distance = distance
+    time_list = data.get_time_list()
 
-            if points_list.time != center_points_list.time:
-                raise Exception("Not same time")
-            time = points_list.time
+    closest_centers_matrix = np.array(data.create_all_frames_all_points_closest_centers_indices(), dtype=int)
 
-            label = points_list.labels_list[index_point]
+    num_points_cluster = num_points // len(clusteres_indexes_unique)
 
-            pair_original_center.append(
-                PairPointCenterPoint(point, closest_center_point, min_distance, index + 1, time, label))
-        return PairPointCenterPointList(pair_original_center)
+    variances_list = []
 
-    def run_through_model(center_points_list: SurfacePointsFrameList, surface_data_list: SurfacePointsFrameList,
-                          model_weights_template: str, batch_size: int, num_points: int, nn_lr):
-        raise NotImplementedError("Not implemented yet")
+    for cluster_index in clusteres_indexes_unique:
+        data_filtered_cluster = data.filter_by_label(cluster_index)
+        model = loaded_models[cluster_index]
 
-        # # todo check if should be normalized
-        # if len(center_points_list.list) != len(surface_data_list.list):
-        #     raise Exception("Not same number of center points and surface data")
-        # pair_list_len = len(surface_data_list.list)
-        #
-        # unique_clusters = surface_data_list.get_unique_clusters()
-        # unique_times = surface_data_list.get_unique_times()
-        #
-        # evaluation_result_list = EvaluationResultList([])
-        #
-        # for i in range(0, pair_list_len):
-        #
-        #     # select original points where time is 0
-        #     surface_data_timeframe = surface_data_list.list[i]
-        #     if surface_data_timeframe.time.index != i:
-        #         raise Exception("Not same time")
-        #
-        #     encoder_time = surface_data_timeframe.time.value
-        #
-        #     center_points_timeframe = center_points_list.list[i]
-        #     if center_points_timeframe.time.index != i:
-        #         raise Exception("Not same time")
-        #
-        #     surface_data_timeframe = surface_data_list.select_random_points(num_points)
-        #
-        #     pair_original_center = find_closest_centers(center_points_timeframe, surface_data_timeframe)
-        #
-        #     for cluster in unique_clusters:
-        #
-        #         # Load the original surface points for the current cluster
-        #         pair_original_center_cluster = pair_original_center.filter_by_point_clusterlabel(cluster)
-        #         surface_data_cluster = pair_original_center_cluster.get_points_list()
-        #         surface_data_cluster = _convert_to_surfacepointsframelist(surface_data_cluster)
-        #
-        #         # Create a SurfaceDataset instance with the filtered surface data
-        #         original_points_dataset = NNDataset(surface_data_cluster)
-        #         # Prepare a DataLoader for original points
-        #         original_points_loader = DataLoader(original_points_dataset, batch_size=batch_size, shuffle=False)
-        #
-        #         # Load the trained model for the current cluster
-        #         model_weights_filepath = model_weights_template.format(cluster=cluster)
-        #         model = _load_trained_model(model_weights_filepath, train_config)
-        #         device = torch.device(NN_DEVICE_STR)
-        #
-        #         model.to(device)
-        #
-        #         # Step 1: Encode the original data
-        #         with torch.no_grad():  # No need to calculate gradients during evaluation
-        #             encoded_features = model.encoder(original_points_loader)
-        #
-        #         decoder_pair_list = DecoderPairList([])
-        #
-        #         # iterate to decoder over all times
-        #         for decoder_time in unique_times:
-        #             # Create a tensor of the same shape as the time feature in the input
-        #             time_tensor = torch.full((encoded_features.size(0), 1), decoder_time, dtype=torch.float32)
-        #             # Concatenate the encoded features with the time tensor
-        #             encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1)
-        #             # Pass through the decoder
-        #             decoded_output = model.decoder(encoded_with_time)
-        #
-        #             decoder_processed_points = decoded_output
-        #             decoder_processed_points_timeframe = SurfacePointsFrame([], None, decoder_time)
-        #             # convert to
-        #             for point in decoder_processed_points:
-        #                 decoder_processed_points_timeframe.points_list.append(point)
-        #
-        #             decoder_center_points_timeframe = center_points_timeframe.get_element_by_time_index(decoder_time)
-        #
-        #             decoder_pair_processed_center = find_closest_centers(decoder_center_points_timeframe,
-        #                                                                  decoder_processed_points_timeframe)
-        #
-        #             decoder_pair_list.append(DecoderElement(decoder_pair_processed_center, decoder_time))
-        #
-        #         evaluation_result_list.append(
-        #             EvaluationResult(pair_original_center_cluster, encoder_time, decoder_pair_list))
-        #
-        # return evaluation_result_list
+        dataset = NNDataset(data_filtered_cluster)
+        input_tensor = torch.tensor(dataset.data, dtype=torch.float32).to(device)
 
-        # load center points
+        for time in time_list:
+            time_index = time.index
 
-    center_points_list = load_centers_data_from_files(train_config.file_path_config.raw_data_folderpath,
-                                                      train_config.time_steps)
+            # filter by time index
+            filtered_input_tensor = NNDataset.filter_by_time_index(input_tensor, time_index)
+            # select num_points_cluster randomly from input_tensor
+            filtered_input_tensor = NNDataset.select_random_values(filtered_input_tensor, num_points_cluster)
 
-    # run through the model
-    evaluation_results_list = run_through_model(center_points_list,
-                                                surface_data_list,
-                                                train_config.file_path_config.model_weights_folderpath_template,
-                                                train_config.nn_config.batch_size, num_points, nn_lr)
+            # CLOSEST CENTERS INDICES
+            closest_centers_indices_tensor = get_closes_centers_indices_by_points_and_time_index(closest_centers_matrix,
+                                                                                                 filtered_input_tensor,
+                                                                                                 time).to(device)
 
-    variance_list = _compute_variance(evaluation_results_list)
+            # INPUT POINTS
+            inputs_points = NNDataset.get_points_columns(filtered_input_tensor)
 
-    return variance_list, evaluation_results_list
+            # CENTERS POINTS at input_time
+            centers_point_inputs_time = get_centers_points_by_time_and_closestcentersindicies(data,
+                                                                                              closest_centers_indices_tensor,
+                                                                                              time).to(device)
+
+            # DISTANCE at input time - input_points and center_points
+            distances_input_time = torch.norm(inputs_points - centers_point_inputs_time, dim=1)
+
+            all_distance_differences = []  # To store differences between input and decoded distances
+            for decoder_time in time_list:
+                # DECODED POINTS
+                processed_points = run_through_nn_at_decoder_time(inputs=filtered_input_tensor, model=model, decoder_time=decoder_time)
+
+                # CENTERS POINTS at decoded_time
+                centers_point_decoded_time = get_centers_points_by_time_and_closestcentersindicies(data,
+                                                                                                   closest_centers_indices_tensor,
+                                                                                                   decoder_time).to(device)
+
+                # DISTANCE at decoded time - processed_points and center_points
+                distances_decoded_time = torch.norm(processed_points - centers_point_decoded_time, dim=1)
+
+                # Compute the difference between the input and decoded distances for this time step
+                distance_difference = distances_input_time - distances_decoded_time
+
+                # Store the distance differences for variance calculation
+                all_distance_differences.append(distance_difference)
+
+            # Now, compute variance of the differences across time for each point
+            all_distance_differences_tensor = torch.stack(all_distance_differences,
+                                                          dim=1)  # Shape: (num_points, num_time_steps)
+            variance_per_point_difference = torch.var(all_distance_differences_tensor,
+                                                      dim=1)  # Variance across time (for each point)
+
+            # Save the variance for each point (converted to numpy for saving)
+            variances_list.append(variance_per_point_difference)
+
+
+    return variances_list
+
+
+@dataclass
+class CentersMetricsInfo:
+    data: SurfacePointsFrameList
+    loaded_models: LoadedModelDic
+    num_points: int
+
+
+def compute_save_centers_metrics(centers_metrics_info: CentersMetricsInfo, filepath: str) -> torch.Tensor:
+    variance_list = compute_centers_metrics2(centers_metrics_info.data, centers_metrics_info.loaded_models,
+                                             centers_metrics_info.num_points)
+
+
+
+    variances_list_numpy = [variance.detach().cpu().numpy() for variance in variance_list]
+    # Save the variance list to a file
+    np.save(filepath, variances_list_numpy)
+
+    logging.info(f"Variance list saved to {filepath}")
+
+    # create from list of tensors one tensor where all values of tensors are in one dimension
+    variance_tensor = torch.cat(variance_list, dim=0)
+
+    return variance_tensor
+
+
+# def get_centers_points_by_time_and_closestcentersindicies(data, closest_centers_indices_tensor, time, device):
+def get_centers_points_by_time_and_closestcentersindicies(data: SurfacePointsFrameList,
+                                                          closest_centers_indices_tensor: torch.Tensor, time: TimeFrame) -> torch.Tensor:
+    all_centers_info_input_time = data.get_element_by_time_index(time.index).normalized_centers_info
+    all_input_centers_points = all_centers_info_input_time.points
+    all_input_centers_points = torch.tensor(all_input_centers_points)
+    centers_point_inputs_time = all_input_centers_points[closest_centers_indices_tensor]
+    return centers_point_inputs_time
+
+
+# def get_centers_matrix_by_cluster_frame(closest_centers_matrix, input_tensor, device, time_index):
+def get_closes_centers_indices_by_points_and_time_index(closest_centers_matrix: np.ndarray, input_tensor: torch.Tensor,
+                                                        time: TimeFrame) -> torch.Tensor:
+    inputs_points_index_column = NNDataset.get_point_indices_column(input_tensor)
+    inputs_points_index_column = [int(element) for element in inputs_points_index_column]
+    closest_centers_filtered = closest_centers_matrix[:, :, 0]  # selects only one closest center
+    closest_centers_indices = closest_centers_filtered[time.index][inputs_points_index_column]
+    closest_centers_indices_tensor = torch.tensor(closest_centers_indices)
+    return closest_centers_indices_tensor
 
 
 def _compute_mesh_shape_metrics(surface_data_list: SurfacePointsFrameList, train_config: TrainConfig,
@@ -823,7 +968,7 @@ def _compute_mesh_shape_metrics(surface_data_list: SurfacePointsFrameList, train
         vertices = mesh.vertices
         all_vertices.append(vertices)
 
-    mesh_points_allframes : SurfacePointsFrameList = _convert_to_surfacepointsframelist(all_vertices)
+    mesh_points_allframes: SurfacePointsFrameList = _convert_to_surfacepointsframelist(all_vertices)
     mesh_points_allframes = label_points_by_clustered_data(mesh_points_allframes, clustered_data)
 
     mesh_points_allframes.assign_time_to_all_elements()
@@ -877,75 +1022,59 @@ def _convert_to_surfacepointsframelist(all_vertices):
 def _save_pointcloud_all_times(surface_data_list, images_save_folderpath, time, train_config):
     pass
 
-def evaluate(train_config: TrainConfig):
-    clustered_data = load_pickle_file(train_config.file_path_config.clustered_data_filepath)
-    if clustered_data is None:
-        logging.error("Clustered data could not be loaded. Exiting.")
-        return
 
-    surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
+# create an alias type for an model dictionary where key is cluster index
 
-    if surface_data_list is None or surface_data_list.public_list is None:
-        logging.error("Surface data list could not be loaded. Exiting.")
-        return
-    # surface_data_list = convert_to_surface_data_list(surface_data_list)
 
-    images_save_folderpath = train_config.file_path_config.images_save_folderpath
+def load_trained_nn_from_file(model_weights_filepath: str, model_type: ModelType) -> nn.Module:
+    # Load the checkpoint
+    model = init_model(model_type)
+    checkpoint = torch.load(model_weights_filepath)  # Load the checkpoint
+    model.load_state_dict(checkpoint['model_state_dict'])  # Load the model state
 
+    # Set the model to evaluation mode
+    model.eval()
+
+    # set device
+    device = torch.device(NN_DEVICE_STR)
+    model.to(device)
+
+    return model
+
+def visualize_centers(data: SurfacePointsFrameList, folderpath: str):
+    """
+    Will visualize points with color based on the index of center
+    :param data:
+    :param folderpath:
+    :return:
+    """
+
+    centers_max_index = len(data.public_list[0].normalized_centers_info.points)
+    # create rgb colors based on the index of center
+    colors = np.zeros((centers_max_index, 3))
+    for i in range(centers_max_index):
+        colors[i] = [i / centers_max_index, 0, 1 - i / centers_max_index]
+
+
+    for frame in data.public_list:
+        centers_points = frame.normalized_centers_info.points
+
+        save_points_with_colors(VisualizationData(centers_points, colors), folderpath, f"Centers at time {frame.time.index}")
+
+    logging.info(f"Saved centers visualization to {folderpath}")
+
+def load_trained_nn_from_files(train_config: TrainConfig) -> LoadedModelDic:
+    loaded_models = LoadedModelDic()
+    num_clusters = train_config.num_clusters
+    model_type = train_config.nn_config.model_type
     model_weights_template = train_config.file_path_config.model_weights_folderpath_template
-    point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath
-    point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
-    batch_size = train_config.nn_config.batch_size
-    nn_lr = train_config.nn_config.nn_lr
+    for i in range(num_clusters):
+        cluster_index = ClusterIndex(i + 1)
+        filepath = model_weights_template.format(cluster=cluster_index)
 
-    # region Metrics
-    # varience_list, evaluation_list = _compute_centers_metrics(surface_data_list, train_config,
-    #                                                           num_points=EVAL_NUM_SURFACE_POINTS)
-    # # save varience_list string represenatation and evaluation_list reprezentetion to file
-    # with open(train_config.file_path_config.center_metric_variances_filepath, "w") as file:
-    #     file.write(str(varience_list))
-    # with open(train_config.file_path_config.center_metric_eval_filepath, "w") as file:
-    #     file.write(str(evaluation_list))
-
-    # mesh_shape_metrics = _compute_mesh_shape_metrics(surface_data_list, train_config, clustered_data)
-    # # save mesh_shape_metrics to file
-    # with open(train_config.file_path_config.mesh_shape_metrics_filepath, "w") as file:
-    #     file.write(str(mesh_shape_metrics))
-    # endregion
-
-    # region Visulize
-
-    original_points_all, processed_points_all, cluster_labels = _prepare_export_data(
-        surface_data_list=surface_data_list, train_config=train_config)
-    #
-    # _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
-    #                                                  os.path.join(images_save_folderpath,
-    #                                                               "time_combined_original_processed"), cluster_labels)
-    # _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(images_save_folderpath, "time_clusters"))
-    #
-    # _visualize_points_with_time(original_points_all, processed_points_all, images_save_folderpath)
-    # # Save the combined image
-    # _visualize_original_and_processed_points(original_points_all, processed_points_all, images_save_folderpath)
-    #
-    # _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
-    #                          point_cloud_processed_filepath)
-    #
-    # _save_pointcloud_all_times(surface_data_list=surface_data_list,
-    #                            images_save_folderpath=os.path.join(images_save_folderpath, "point_clouds_all_times"), time=0,
-    #                            train_config=train_config)
-    #
-    # _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-    #                            images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_0"), time=0,
-    #                            train_config=train_config)
-
-    # _visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-    #                            images_save_folderpath=os.path.join(images_save_folderpath, "time_uv_points_59"),
-    #                            time=59, train_config=train_config)
-
-    _create_pointclouds_from_time_to_all_times(surface_data_list=surface_data_list, images_save_folderpath=os.path.join(images_save_folderpath, "point_clouds_all_times"), time_index=0, train_config=train_config)
-
-    # endregion
-
+        loaded_model = load_trained_nn_from_file(filepath, model_type)
+        loaded_models[cluster_index] = loaded_model
+    return loaded_models
 
 def get_loaded_meshes_list(meshes_folder_path: str):
     meshes_filepaths_list = get_meshes_list(meshes_folder_path)
@@ -954,3 +1083,86 @@ def get_loaded_meshes_list(meshes_folder_path: str):
         mesh = trimesh.load(mesh_filepath)
         loaded_meshes_list.append(mesh)
     return loaded_meshes_list
+
+
+def evaluate(train_config: TrainConfig):
+    surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
+
+    if surface_data_list is None or surface_data_list.public_list is None:
+        logging.error("Surface data list could not be loaded. Exiting.")
+        return
+    # surface_data_list = convert_to_surface_data_list(surface_data_list)
+
+    # create model weights filepaths
+    loaded_models = load_trained_nn_from_files(train_config)
+
+    evaluation_folderpath = train_config.file_path_config.evaluation_folderpath
+
+
+
+    processed_data = process_mesh_through_model(MeshData(time_index=0), train_config)
+
+    visualizer = DataVisualizer(processed_data.processed_data)
+    mesh_files_folderpath = os.path.join(evaluation_folderpath, "mesh_files")
+    os.makedirs(mesh_files_folderpath, exist_ok=True)
+    visualizer.save_as_meshes_to_file(mesh_files_folderpath, processed_data.origin_mesh)
+    # region Metrics
+
+    # mesh_shape_metrics = _compute_mesh_shape_metrics(surface_data_list, train_config, clustered_data)
+    # # save mesh_shape_metrics to file
+    # with open(train_config.file_path_config.mesh_shape_metrics_filepath, "w") as file:
+    #     file.write(str(mesh_shape_metrics))
+    eval_surface_points_num = 100
+
+    variance_tensor = compute_save_centers_metrics(
+        CentersMetricsInfo(surface_data_list, loaded_models, eval_surface_points_num),
+        train_config.file_path_config.center_metric_eval_filepath)
+    print(f"Variance list saved to {train_config.file_path_config.center_metric_eval_filepath}")
+
+    standard_deviation_tensor = torch.sqrt(variance_tensor)
+    mean_variance = variance_tensor.mean()
+
+    # endregion
+
+    # region Visulize
+    centers_image_foldername = "centers_img"
+    centers_image_folderpath = os.path.join(evaluation_folderpath, centers_image_foldername)
+    os.makedirs(centers_image_folderpath, exist_ok=True)
+    visualize_centers(surface_data_list, centers_image_folderpath)
+
+
+    original_points_all, processed_points_all, cluster_labels = _prepare_export_data(
+        surface_data_list=surface_data_list, train_config=train_config)
+
+    _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
+                                                     os.path.join(evaluation_folderpath,
+                                                                  "time_combined_original_processed"), cluster_labels)
+    _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(evaluation_folderpath, "time_clusters"))
+
+    _visualize_points_with_time(original_points_all, processed_points_all, evaluation_folderpath)
+    # Save the combined image
+    _visualize_original_and_processed_points(original_points_all, processed_points_all, evaluation_folderpath)
+
+    point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath
+    point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
+    _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
+                             point_cloud_processed_filepath)
+
+    _save_pointcloud_all_times(surface_data_list=surface_data_list,
+                               images_save_folderpath=os.path.join(evaluation_folderpath, "point_clouds_all_times"), time=0,
+                               train_config=train_config)
+
+    visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+                              images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_0"), time_index=0,
+                              train_config=train_config)
+
+    visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+                              images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_59"),
+                              time_index=59, train_config=train_config)
+
+    _create_pointclouds_from_time_to_all_times(surface_data_list=surface_data_list,
+                                               images_save_folderpath=os.path.join(evaluation_folderpath,
+                                                                                   "point_clouds_all_times"),
+                                               time_index=0, train_config=train_config)
+
+    # endregion

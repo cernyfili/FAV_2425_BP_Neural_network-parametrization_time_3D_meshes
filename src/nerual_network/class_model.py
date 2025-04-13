@@ -1,9 +1,12 @@
+from enum import Enum
+
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 
 from data_processing.class_mapping import SurfacePointsFrameList
+from utils.constants import ModelType
 
 
 # Restrict access to underscore-prefixed functions
@@ -78,9 +81,27 @@ class NNDataset(Dataset):
 
     @staticmethod
     def split_by_time_value(input_tensor: np.ndarray) -> list[np.ndarray]:
-        time_indices = input_tensor[:, 3]
-        unique_time_indices = np.unique(time_indices)
-        return [input_tensor[time_indices == time_index] for time_index in unique_time_indices]
+        time_values = input_tensor[:, 3]
+        unique_time_values = np.unique(time_values)
+        return [input_tensor[time_values == time_index] for time_index in unique_time_values]
+
+    @staticmethod
+    def select_random_values(input_tensor: torch.Tensor, num_values: int) -> torch.Tensor:
+        """
+        Select a random subset of values from the input tensor.
+
+        Args:
+            input_tensor (torch.Tensor): The input tensor.
+            num_values (int): The number of random values to select.
+
+        Returns:
+            torch.Tensor: A tensor containing the selected random values.
+        """
+        if num_values > input_tensor.size(0):
+            raise ValueError("num_values must be less than or equal to the size of the input tensor.")
+
+        indices = torch.randperm(input_tensor.size(0))[:num_values]
+        return input_tensor[indices]
 
 
 class Simple_MLP_01(nn.Module):
@@ -105,12 +126,12 @@ class Simple_MLP_01(nn.Module):
             nn.Linear(64, 3)
         )
 
-    def forward(self, x):
-        time_value = x[:, 3].unsqueeze(1)  # Extract time value and keep it as a column vector
-        encoded_features = self.encoder(x)
-        encoded_with_time = torch.cat((encoded_features, time_value), dim=1)  # Concatenate encoded features with time
-        decoded_output = self.decoder(encoded_with_time)
-        return decoded_output
+    # def forward(self, x):
+    #     time_value = x[:, 3].unsqueeze(1)  # Extract time value and keep it as a column vector
+    #     encoded_features = self.encoder(x)
+    #     encoded_with_time = torch.cat((encoded_features, time_value), dim=1)  # Concatenate encoded features with time
+    #     decoded_output = self.decoder(encoded_with_time)
+    #     return decoded_output
 
 
 class Simple_MLP_02(nn.Module):
@@ -148,33 +169,33 @@ class Simple_MLP_02(nn.Module):
             nn.Linear(64, 3)
         )
 
-    def forward(self, x, time_value: int = None):
-        """
-        Forward pass for the model.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-            time_value (torch.Tensor, optional): Custom time value as a column vector.
-                                                 If None, it will be extracted from `x`.
-
-        Returns:
-            torch.Tensor: Decoded output.
-        """
-        time = x[:, 3].unsqueeze(1)
-        if time_value is not None:
-            # change all the time_value so all elements have the value of time_value
-            time = torch.full_like(time, time_value)
-
-        # Encode the input features
-        encoded_features = self.encoder(x)
-
-        # Concatenate the encoded features with the time value
-        encoded_with_time = torch.cat((encoded_features, time), dim=1)
-
-        # Decode the combined encoded features and time
-        decoded_output = self.decoder(encoded_with_time)
-
-        return decoded_output
+    # def forward(self, x, time_value: int = None):
+    #     """
+    #     Forward pass for the model.
+    #
+    #     Args:
+    #         x (torch.Tensor): Input tensor.
+    #         time_value (torch.Tensor, optional): Custom time value as a column vector.
+    #                                              If None, it will be extracted from `x`.
+    #
+    #     Returns:
+    #         torch.Tensor: Decoded output.
+    #     """
+    #     time = x[:, 3].unsqueeze(1)
+    #     if time_value is not None:
+    #         # change all the time_value so all elements have the value of time_value
+    #         time = torch.full_like(time, time_value)
+    #
+    #     # Encode the input features
+    #     encoded_features = self.encoder(x)
+    #
+    #     # Concatenate the encoded features with the time value
+    #     encoded_with_time = torch.cat((encoded_features, time), dim=1)
+    #
+    #     # Decode the combined encoded features and time
+    #     decoded_output = self.decoder(encoded_with_time)
+    #
+    #     return decoded_output
 
 
 class Simple_MLP_03(nn.Module):
@@ -214,36 +235,36 @@ class Simple_MLP_03(nn.Module):
             nn.Linear(64, 3)
         )
 
-    def forward(self, x, time_value: int = None):
-        """
-        Forward pass for the model.
-
-        Args:
-            x (torch.Tensor): Input tensor.
-            time_value (torch.Tensor, optional): Custom time value as a column vector.
-                                                 If None, it will be extracted from `x`.
-
-        Returns:
-            torch.Tensor: Decoded output.
-        """
-        time = x[:, 3].unsqueeze(1)
-        if time_value is not None:
-            # change all the time_value so all elements have the value of time_value
-            time = torch.full_like(time, time_value)
-
-        # Ensure the input tensor has requires_grad=True
-        x.requires_grad_(True)
-
-        # Encode the input features
-        encoded_features = self.encoder(x)
-
-        # Concatenate the encoded features with the time value
-        encoded_with_time = torch.cat((encoded_features, time), dim=1)
-
-        # Decode the combined encoded features and time
-        decoded_output = self.decoder(encoded_with_time)
-
-        return decoded_output
+    # def forward(self, x, time_value: int = None):
+    #     """
+    #     Forward pass for the model.
+    #
+    #     Args:
+    #         x (torch.Tensor): Input tensor.
+    #         time_value (torch.Tensor, optional): Custom time value as a column vector.
+    #                                              If None, it will be extracted from `x`.
+    #
+    #     Returns:
+    #         torch.Tensor: Decoded output.
+    #     """
+    #     time = x[:, 3].unsqueeze(1)
+    #     if time_value is not None:
+    #         # change all the time_value so all elements have the value of time_value
+    #         time = torch.full_like(time, time_value)
+    #
+    #     # Ensure the input tensor has requires_grad=True
+    #     x.requires_grad_(True)
+    #
+    #     # Encode the input features
+    #     encoded_features = self.encoder(x)
+    #
+    #     # Concatenate the encoded features with the time value
+    #     encoded_with_time = torch.cat((encoded_features, time), dim=1)
+    #
+    #     # Decode the combined encoded features and time
+    #     decoded_output = self.decoder(encoded_with_time)
+    #
+    #     return decoded_output
 
 
 class Simple_MLP_04(nn.Module):
@@ -282,30 +303,39 @@ class Simple_MLP_04(nn.Module):
             nn.Linear(128, 3)
         )
 
-    def forward(self, x, time_value: int = None):
-        """
-        Forward pass for the model.
+    # def forward(self, x, time_value: int = None):
+    #     """
+    #     Forward pass for the model.
+    #
+    #     Args:
+    #         x (torch.Tensor): Input tensor.
+    #         time_value (torch.Tensor, optional): Custom time value as a column vector.
+    #                                              If None, it will be extracted from `x`.
+    #
+    #     Returns:
+    #         torch.Tensor: Decoded output.
+    #     """
+    #     time = x[:, 3].unsqueeze(1)
+    #     if time_value is not None:
+    #         # change all the time_value so all elements have the value of time_value
+    #         time = torch.full_like(time, time_value)
+    #
+    #     # Encode the input features
+    #     encoded_features = self.encoder(x)
+    #
+    #     # Concatenate the encoded features with the time value
+    #     encoded_with_time = torch.cat((encoded_features, time), dim=1)
+    #
+    #     # Decode the combined encoded features and time
+    #     decoded_output = self.decoder(encoded_with_time)
+    #
+    #     return decoded_output
 
-        Args:
-            x (torch.Tensor): Input tensor.
-            time_value (torch.Tensor, optional): Custom time value as a column vector.
-                                                 If None, it will be extracted from `x`.
 
-        Returns:
-            torch.Tensor: Decoded output.
-        """
-        time = x[:, 3].unsqueeze(1)
-        if time_value is not None:
-            # change all the time_value so all elements have the value of time_value
-            time = torch.full_like(time, time_value)
 
-        # Encode the input features
-        encoded_features = self.encoder(x)
-
-        # Concatenate the encoded features with the time value
-        encoded_with_time = torch.cat((encoded_features, time), dim=1)
-
-        # Decode the combined encoded features and time
-        decoded_output = self.decoder(encoded_with_time)
-
-        return decoded_output
+MODELS_LIST: dict[ModelType: callable] ={
+    ModelType.SIMPLE_MLP_01: Simple_MLP_01,
+    ModelType.SIMPLE_MLP_02: Simple_MLP_02,
+    ModelType.SIMPLE_MLP_03: Simple_MLP_03,
+    ModelType.SIMPLE_MLP_04: Simple_MLP_04
+}

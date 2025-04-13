@@ -231,7 +231,7 @@ class TimeFrame:
         self.value = value
 
     def __repr__(self):
-        return f"TimeFrame(index={self.index}, value={self.value})"
+        return f"{self.index} : {self.value}"
 
 
 class CentersInfo:
@@ -752,6 +752,8 @@ class CentersPointsList(list):
         return transposed_points
 
 
+
+
 class SurfacePointsFrameList:
     def __init__(self, surface_data_list: list[SurfacePointsFrame]):
         self._normalized_settings = NormalizedSetttings(False, None, None)
@@ -884,6 +886,11 @@ class SurfacePointsFrameList:
 
         return new_surface_points_frame_list
 
+    def only_filter_by_label(self, label_index) -> None:
+        raise NotImplementedError("Cant be used its not filtered in filter by label")
+
+
+
     # def slice_arrays(self, num_of_elements):
     #     self.list = [surface_data.slice_arrays(num_of_elements) for surface_data in self.list]
     #     return self
@@ -977,7 +984,7 @@ class SurfacePointsFrameList:
     #     """
     #     return [label for surface_data in self._list for label in surface_data.labels_list]
 
-    def get_unique_clusters(self):
+    def get_unique_clusters_indexes(self):
         """
         Return the set of unique clusters.
         """
@@ -1089,7 +1096,30 @@ class SurfacePointsFrameList:
 
 
 
+def surfacepointsframelist_group_by_label(data : SurfacePointsFrameList) -> dict[int, SurfacePointsFrameList]:
+    """
+    Group the SurfaceData objects by their labels.
 
+    Returns:
+    - A dictionary where the keys are label indices and the values are lists of SurfaceData objects with that label.
+    """
+    raise NotImplementedError("This function is not implemented yet.")
+    # grouped_data = {}
+    #
+    # # find in data.public_list[0] unique labels from label list and add to grouped_data deep copy of data
+    # labels = data.public_list[0].labels_list
+    # if labels is None or not labels:
+    #     raise ValueError("Labels list is empty.")
+    # # find unique labels
+    # unique_labels = set(labels)
+    # for label in unique_labels:
+    #     grouped_data[label] = deepcopy(data)
+    #
+    # # filter points by label
+    # for label, surface_data in grouped_data.items():
+    #     surface_data.only_filter_by_label(label)
+    #
+    # return grouped_data
 
 
 
@@ -1106,3 +1136,13 @@ class SurfacePointsFrameList:
 #
 #     raise ValueError("Index not found")
 
+@dataclass
+class LossFunctionInfo:
+    """Class to hold information about a loss function."""
+    meshes_list: MeshList | None = None
+    device: any = None
+    time_list: list[TimeFrame] | None = None
+    data_cluster: SurfacePointsFrameList | None = None
+    data : SurfacePointsFrameList | None = None
+    closest_centers_indicies_all_frames : np.ndarray | None = None
+    """in the shape of (number_of_frames, number_of_points, number_of_closest_centers) int"""
