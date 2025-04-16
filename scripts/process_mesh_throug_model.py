@@ -21,8 +21,7 @@ from trimesh import Trimesh
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from data_processing.class_mapping import SurfacePointsFrame, TimeFrame, SurfacePointsFrameList
 from data_processing.mapping import categorize_points_with_labels
-from nerual_network.evaluation.evaluation import _create_pointclouds_from_time_to_all_times, \
-    _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization
+from nerual_network.helpers import _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization
 from utils.constants import FilePathConfig, DEFAULT_TRAIN_CONFIG, TrainConfig
 from utils.helpers import load_pickle_file
 

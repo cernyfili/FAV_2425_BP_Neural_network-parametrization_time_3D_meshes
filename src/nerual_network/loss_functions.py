@@ -99,7 +99,7 @@ def _run_through_encoder(inputs, encoder):
     # remove last columen (time_index) from inputs
     inputs_encoder = NNDataset.get_encoder_input(inputs)
 
-    # Forward pass: Encoder and Decoder
+
     encoded = encoder(inputs_encoder)
 
     return encoded

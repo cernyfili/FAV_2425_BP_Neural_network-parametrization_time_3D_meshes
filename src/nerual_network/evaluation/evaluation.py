@@ -1,29 +1,28 @@
+import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Dict
 
 import numpy as np
 import torch
 import trimesh
 from matplotlib import pyplot as plt
-from numpy import ndarray, dtype
 from scipy.sparse import csgraph
 from scipy.sparse.linalg import eigsh
 from torch import nn
 from torch.utils.data import DataLoader
 
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
-from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame, TimeFrame
-from data_processing.file_loader import load_centers_files
-from nerual_network.evaluation.class_evaluation import PairPointCenterPoint, PairPointCenterPointList, DecoderElement, \
-    DecoderPairList, EvaluationResult, EvaluationResultList
-from nerual_network.loss_functions import _add_time_column, run_through_nn_at_decoder_time, run_through_nn_at_same_time
-from scripts.process_mesh_throug_model import MESH_TIME_INDEX, MeshData, process_mesh_through_model, DataVisualizer
+from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame
+from nerual_network.helpers import _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization, \
+    _run_model_decoder_all_times_with_selected_encoder_time, _load_trained_model
+from nerual_network.loss_functions import run_through_nn_at_decoder_time, run_through_nn_at_same_time
+from scripts.process_mesh_throug_model import MeshData, process_mesh_through_model, DataVisualizer
 from src.nerual_network.class_model import NNDataset
 from utils.constants import NN_DEVICE_STR, TrainConfig, ModelType
 from utils.helpers import load_pickle_file, get_meshes_list
-from utils.nn_config_utils import init_training_config, init_model
+from utils.nn_config_utils import init_model
 
 
 # Restrict access to underscore-prefixed functions
@@ -105,6 +104,7 @@ def _visualize_combined_surface_points_for_each_time(original_points_all, proces
     :param image_save_folder:
     :return:
     """
+    logging.info("START: Visulazing for each time")
     # Ensure the image save folder exists
     os.makedirs(image_save_folder, exist_ok=True)
 
@@ -122,6 +122,7 @@ def _visualize_combined_surface_points_for_each_time(original_points_all, proces
                                                         f'time_{i}_combined_surface_points_time.png', time)
 
         # visulize clusters
+    logging.info("END: Visulazing for each time")
 
 
 def _visualize_points_with_time(original_points_all, processed_points_all, image_save_folderpath):
@@ -257,6 +258,7 @@ def _visualize_original_and_processed_points(original_points_all, processed_poin
 
 
 def _prepare_export_data(surface_data_list, train_config: TrainConfig):
+    logging.info("START: Preparing data for visualization")
     model_weights_template = train_config.file_path_config.model_weights_folderpath_template
     batch_size = train_config.nn_config.batch_size
 
@@ -308,37 +310,8 @@ def _prepare_export_data(surface_data_list, train_config: TrainConfig):
     processed_points_all = np.vstack(processed_points_all) if processed_points_all else np.empty((0, 4))
 
     processed_points_all = np.hstack((processed_points_all, original_points_all[:, 3].reshape(-1, 1)))
-
+    logging.info("END: Preparing data for visualization")
     return original_points_all, processed_points_all, cluster_labels
-
-
-def _load_trained_model(model_weights_filepath: str, train_config: TrainConfig):
-    """
-    Loads the trained neural network model weights from a specified file path.
-
-    Args:
-        model_weights_filepath (str): The path to the file containing the model weights.
-        input_size (int): The number of input features for the model.
-        hidden_size (int): The number of hidden units in the model.
-        output_size (int): The number of output features for the model.
-
-    Returns:
-        model (nn.Module): The loaded neural network model.
-    """
-
-    # Load the checkpoint
-    model, optimizer, loss_function = init_training_config(train_config)
-
-    checkpoint = torch.load(model_weights_filepath)  # Load the checkpoint
-    model.load_state_dict(checkpoint['model_state_dict'])  # Load the model state
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])  # Load the optimizer state
-    epoch = checkpoint['epoch']  # Get the epoch number
-    val_loss = checkpoint['val_loss']  # Get the validation loss
-
-    # Set the model to evaluation mode
-    model.eval()
-
-    return model
 
 
 def _visualize_clusters(points, labels, image_save_folder, image_name):
@@ -391,106 +364,6 @@ def _visualize_clusters(points, labels, image_save_folder, image_name):
     plt.savefig(image_path)
     plt.close(fig)
 
-
-def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: SurfacePointsFrameList,
-                                                            time_index: int, train_config: TrainConfig) -> tuple[
-    list[ndarray[Any, dtype[Any]]], list[list[ndarray[Any, dtype[Any]]]]]:
-    model_weights_template = train_config.file_path_config.model_weights_folderpath_template
-    batch_size = train_config.nn_config.batch_size
-
-    original_points_all = []
-    processed_points_all = []
-
-    unique_clusters = surface_data_list.get_unique_clusters_indexes()
-
-    # select original points where time is 0
-    original_points_frame = surface_data_list.get_element_by_time_index(time_index)
-
-    # iterate over clusters
-    for i, cluster in enumerate(unique_clusters):
-        if i >= train_config.num_clusters:
-            break
-        # Load the original surface points for the current cluster
-        surface_data_cluster_timeframe = original_points_frame.filter_by_label(cluster)
-
-        # Create a SurfaceDataset instance with the filtered surface data
-        original_points_dataset_one_cluster = NNDataset(SurfacePointsFrameList([surface_data_cluster_timeframe]))
-
-        # Prepare a DataLoader for original points
-        original_points_loader = DataLoader(original_points_dataset_one_cluster, batch_size=batch_size, shuffle=False)
-
-        # Load the trained model for the current cluster
-        model_weights_filepath = model_weights_template.format(cluster=cluster)
-        model = _load_trained_model(model_weights_filepath, train_config)
-        device = torch.device(NN_DEVICE_STR)
-        model.to(device)
-
-        encoded_features = []
-
-        # Step 1: Encode the original data
-        with torch.no_grad():  # No need to calculate gradients during evaluation
-            for inputs in original_points_loader:
-                inputs = inputs[0].float().to(device)
-                encoder_input_data = NNDataset.get_encoder_input(inputs)
-                encoded_features_element = model.encoder(encoder_input_data)
-                encoded_features.append(encoded_features_element)
-
-        # Process the original points through the model
-        encoded_features = torch.cat(encoded_features).to(device)
-
-        processed_points_one_cluster = []
-        # Step 2: Decode in all times
-        for i, surface_points_frame in enumerate(surface_data_list.public_list):
-            if surface_points_frame.time.index != i:
-                raise Exception("Not same time")
-
-            time_value = surface_points_frame.time.value
-            encoded_with_time = _add_time_column(encoded_features, time_value)
-
-            # Pass through the decoder
-            decoded_output = model.decoder(encoded_with_time)
-            # Add the time_value as a column to decoded_output
-
-            decoded_output = decoded_output.cpu().detach().numpy()
-            time_column = np.full((decoded_output.shape[0], 1), time_value)
-            decoded_output_with_time = np.hstack((decoded_output, time_column))
-
-            # Append the modified decoded output
-            processed_points_one_cluster.append(decoded_output_with_time)
-
-        # Convert processed points to a single numpy array
-        processed_points_all.append(processed_points_one_cluster)
-        # Accumulate all original and processed points
-        original_points_all.append(
-            np.array(original_points_dataset_one_cluster.data))  # You can store the numpy array directly
-
-    return original_points_all, processed_points_all
-
-
-def __convert_points_to_colors(points) -> np.ndarray:
-    # Funkce pro normalizaci pro jednotlivé osy
-    def normalize_slices(data):
-        normalized = np.zeros_like(data)
-
-        min_val = np.min(data, axis=0)
-        max_val = np.max(data, axis=0)
-
-        for index, value in enumerate(data):
-            normalized_value = (value - min_val) / (max_val - min_val)
-
-            normalized[index] = normalized_value
-
-        return normalized
-
-    # Normalizace podle osy X, Y, Z
-    normalized_x = normalize_slices(points[:, 0])
-    normalized_y = normalize_slices(points[:, 1])
-    normalized_z = normalize_slices(points[:, 2])
-
-    # Spojení barev
-    rgb_colors = np.stack([normalized_x, normalized_y, normalized_z], axis=1)
-
-    return rgb_colors
 
 @dataclass
 class VisualizationData:
@@ -547,35 +420,6 @@ def visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images_
     visualize_for_eachtime(rgb_colors, processed_points_split_by_time_value)
 
 
-def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
-        surface_data_list: SurfacePointsFrameList, time_index: int, train_config: TrainConfig) -> tuple[
-    np.ndarray, list[np.ndarray]]:
-    def __prepare_data_for_visualization(original_points_all: list[np.ndarray],
-                                         processed_points_all: list[np.ndarray]) -> tuple[ndarray, list[np.ndarray]]:
-        # convert original_points_all to only array of points
-        original_points_list_of_points = np.vstack(original_points_all)
-        # get only x, y, z from points
-        original_points_list_of_points = original_points_list_of_points[:, :3]
-        rgb_colors = __convert_points_to_colors(original_points_list_of_points)
-
-        # Extract unique time values assuming the last column contains time values
-        # convert processed_points_all to only array of points
-        processed_points_list_of_points = []
-        for processed_points_one_cluster in processed_points_all:
-            processed_points_list_of_points.extend(processed_points_one_cluster)
-        processed_points_list_of_points = np.vstack(processed_points_list_of_points)
-
-        processed_points_split_by_time_value = NNDataset.split_by_time_value(processed_points_list_of_points)
-        # get only x,y,z from points
-        processed_points_split_by_time_value = [points[:, :3] for points in processed_points_split_by_time_value]
-
-        return rgb_colors, processed_points_split_by_time_value
-
-    original_points_all, processed_points_all = _run_model_decoder_all_times_with_selected_encoder_time(
-        surface_data_list=surface_data_list, time_index=time_index, train_config=train_config)
-    return __prepare_data_for_visualization(original_points_all, processed_points_all)
-
-
 def _visualize_combined_surface_points_for_one_time(image_save_folder, original_points_slice, processed_points_slice,
                                                     image_name, time):
     # Create a new figure for each time slice
@@ -584,8 +428,9 @@ def _visualize_combined_surface_points_for_one_time(image_save_folder, original_
     # Filter original points for this time slice
 
     # Plot original points for this time slice
-    ax.scatter(original_points_slice[:, 0], original_points_slice[:, 1], original_points_slice[:, 2],
-               color='blue', label='Original Points', alpha=0.5)
+    # ax.scatter(original_points_slice[:, 0], original_points_slice[:, 1], original_points_slice[:, 2],
+    #            color='blue', label='Original Points', alpha=0.5)
+    # todo change
 
     # Plot processed points for this time slice
     ax.scatter(processed_points_slice[:, 0], processed_points_slice[:, 1], processed_points_slice[:, 2],
@@ -599,7 +444,7 @@ def _visualize_combined_surface_points_for_one_time(image_save_folder, original_
     image_path = os.path.join(image_save_folder, image_name)
     plt.savefig(image_path)
     plt.close(fig)
-    print(f"Saved combined surface points image at {image_path}")
+    logging.info(f"Saved combined surface points image at {image_path}")
 
 
 # endregion
@@ -781,6 +626,7 @@ def _compute_variance(evaluation_results_list):
 
 def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: LoadedModelDic, num_points: int) -> list[
     torch.tensor]:
+    logging.info(f"START: computing centers metrics for points: {num_points}")
     device = torch.device(NN_DEVICE_STR)
     clusteres_indexes_unique = data.get_unique_clusters_indexes()
 
@@ -851,7 +697,7 @@ def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: Loaded
             # Save the variance for each point (converted to numpy for saving)
             variances_list.append(variance_per_point_difference)
 
-
+    logging.info(f"END: computing centers metrics for points: {num_points}")
     return variances_list
 
 
@@ -885,7 +731,7 @@ def get_centers_points_by_time_and_closestcentersindicies(data: SurfacePointsFra
                                                           closest_centers_indices_tensor: torch.Tensor, time: TimeFrame) -> torch.Tensor:
     all_centers_info_input_time = data.get_element_by_time_index(time.index).normalized_centers_info
     all_input_centers_points = all_centers_info_input_time.points
-    all_input_centers_points = torch.tensor(all_input_centers_points)
+    all_input_centers_points = torch.tensor(all_input_centers_points).to(closest_centers_indices_tensor.device)
     centers_point_inputs_time = all_input_centers_points[closest_centers_indices_tensor]
     return centers_point_inputs_time
 
@@ -1058,12 +904,16 @@ def visualize_centers(data: SurfacePointsFrameList, folderpath: str):
 
     for frame in data.public_list:
         centers_points = frame.normalized_centers_info.points
+        file_name = f"centers_img_{frame.time.index}"
+        filepath = os.path.join(folderpath, file_name)
 
-        save_points_with_colors(VisualizationData(centers_points, colors), folderpath, f"Centers at time {frame.time.index}")
+        save_points_with_colors(VisualizationData(centers_points, colors), filepath, f"Centers at time {frame.time.index}")
 
     logging.info(f"Saved centers visualization to {folderpath}")
 
 def load_trained_nn_from_files(train_config: TrainConfig) -> LoadedModelDic:
+
+    logging.info(f"START: loading nn from model weights files {train_config.file_path_config.model_weights_folderpath_template}")
     loaded_models = LoadedModelDic()
     num_clusters = train_config.num_clusters
     model_type = train_config.nn_config.model_type
@@ -1074,6 +924,9 @@ def load_trained_nn_from_files(train_config: TrainConfig) -> LoadedModelDic:
 
         loaded_model = load_trained_nn_from_file(filepath, model_type)
         loaded_models[cluster_index] = loaded_model
+
+    logging.info(
+        f"END: loading nn from model weights files")
     return loaded_models
 
 def get_loaded_meshes_list(meshes_folder_path: str):
@@ -1094,75 +947,88 @@ def evaluate(train_config: TrainConfig):
     # surface_data_list = convert_to_surface_data_list(surface_data_list)
 
     # create model weights filepaths
-    loaded_models = load_trained_nn_from_files(train_config)
+
 
     evaluation_folderpath = train_config.file_path_config.evaluation_folderpath
 
 
-
-    processed_data = process_mesh_through_model(MeshData(time_index=0), train_config)
-
-    visualizer = DataVisualizer(processed_data.processed_data)
-    mesh_files_folderpath = os.path.join(evaluation_folderpath, "mesh_files")
-    os.makedirs(mesh_files_folderpath, exist_ok=True)
-    visualizer.save_as_meshes_to_file(mesh_files_folderpath, processed_data.origin_mesh)
+    #
+    # processed_data = process_mesh_through_model(MeshData(time_index=0), train_config)
+    # visualizer = DataVisualizer(processed_data.processed_data)
+    # mesh_files_folderpath = os.path.join(evaluation_folderpath, "mesh_files")
+    # os.makedirs(mesh_files_folderpath, exist_ok=True)
+    # visualizer.save_as_meshes_to_file(mesh_files_folderpath, processed_data.origin_mesh)
     # region Metrics
 
     # mesh_shape_metrics = _compute_mesh_shape_metrics(surface_data_list, train_config, clustered_data)
     # # save mesh_shape_metrics to file
     # with open(train_config.file_path_config.mesh_shape_metrics_filepath, "w") as file:
     #     file.write(str(mesh_shape_metrics))
+
+
+    # endregion
+
+    # region Visulize
+    # centers_image_foldername = "centers_img"
+    # centers_image_folderpath = os.path.join(evaluation_folderpath, centers_image_foldername)
+    # os.makedirs(centers_image_folderpath, exist_ok=True)
+    # visualize_centers(surface_data_list, centers_image_folderpath)
+
+
+    # original_points_all, processed_points_all, cluster_labels = _prepare_export_data(
+    #     surface_data_list=surface_data_list, train_config=train_config)
+    #
+    # _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
+    #                                                  os.path.join(evaluation_folderpath,
+    #                                                               "time_combined_only_processed"), cluster_labels)
+    # _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(evaluation_folderpath, "time_clusters"))
+    #
+    # _visualize_points_with_time(original_points_all, processed_points_all, evaluation_folderpath)
+    # # Save the combined image
+    #_visualize_original_and_processed_points(original_points_all, processed_points_all, evaluation_folderpath)
+    #
+    # point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath
+    # point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
+    # _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
+    #                          point_cloud_processed_filepath)
+    #
+    # _save_pointcloud_all_times(surface_data_list=surface_data_list,
+    #                            images_save_folderpath=os.path.join(evaluation_folderpath, "point_clouds_all_times"), time=0,
+    #                            train_config=train_config)
+    #
+    # visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+    #                           images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_0"), time_index=0,
+    #                           train_config=train_config)
+    #
+    # visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+    #                           images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_59"),
+    #                           time_index=59, train_config=train_config)
+    #
+    # _create_pointclouds_from_time_to_all_times(surface_data_list=surface_data_list,
+    #                                            images_save_folderpath=os.path.join(evaluation_folderpath,
+    #                                                                                "point_clouds_all_times_time_0"),
+    #                                            time_index=0, train_config=train_config)
+
+    # endregion
+    loaded_models = load_trained_nn_from_files(train_config)
+
     eval_surface_points_num = 100
 
     variance_tensor = compute_save_centers_metrics(
         CentersMetricsInfo(surface_data_list, loaded_models, eval_surface_points_num),
         train_config.file_path_config.center_metric_eval_filepath)
-    print(f"Variance list saved to {train_config.file_path_config.center_metric_eval_filepath}")
 
     standard_deviation_tensor = torch.sqrt(variance_tensor)
     mean_variance = variance_tensor.mean()
 
-    # endregion
+    # Prepare dictionary
+    metrics_dict = {
+        "standard_deviation": standard_deviation_tensor.item(),
+        "mean_variance": mean_variance.item()
+    }
+    filepath = os.path.join(evaluation_folderpath, "centers_metrics_values.json")
 
-    # region Visulize
-    centers_image_foldername = "centers_img"
-    centers_image_folderpath = os.path.join(evaluation_folderpath, centers_image_foldername)
-    os.makedirs(centers_image_folderpath, exist_ok=True)
-    visualize_centers(surface_data_list, centers_image_folderpath)
-
-
-    original_points_all, processed_points_all, cluster_labels = _prepare_export_data(
-        surface_data_list=surface_data_list, train_config=train_config)
-
-    _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
-                                                     os.path.join(evaluation_folderpath,
-                                                                  "time_combined_original_processed"), cluster_labels)
-    _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(evaluation_folderpath, "time_clusters"))
-
-    _visualize_points_with_time(original_points_all, processed_points_all, evaluation_folderpath)
-    # Save the combined image
-    _visualize_original_and_processed_points(original_points_all, processed_points_all, evaluation_folderpath)
-
-    point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath
-    point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
-    _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
-                             point_cloud_processed_filepath)
-
-    _save_pointcloud_all_times(surface_data_list=surface_data_list,
-                               images_save_folderpath=os.path.join(evaluation_folderpath, "point_clouds_all_times"), time=0,
-                               train_config=train_config)
-
-    visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-                              images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_0"), time_index=0,
-                              train_config=train_config)
-
-    visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-                              images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_59"),
-                              time_index=59, train_config=train_config)
-
-    _create_pointclouds_from_time_to_all_times(surface_data_list=surface_data_list,
-                                               images_save_folderpath=os.path.join(evaluation_folderpath,
-                                                                                   "point_clouds_all_times"),
-                                               time_index=0, train_config=train_config)
-
-    # endregion
+    # Save to JSON
+    with open(filepath, 'w') as f:
+        json.dump(metrics_dict, f, indent=4)
+    logging.info(f"centrics metrics saved to file {filepath}")
