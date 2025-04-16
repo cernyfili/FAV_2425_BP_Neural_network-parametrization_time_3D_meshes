@@ -7,6 +7,7 @@ import trimesh
 from numpy import ndarray
 from scipy.spatial import KDTree
 from sklearn.decomposition import PCA
+from sklearn.linear_model.tests.test_perceptron import indices
 from sklearn.preprocessing import StandardScaler
 from trimesh import Trimesh
 
@@ -63,11 +64,14 @@ class LabeledPoint:
     Class to represents point in object for one cluster and for a single time step.
     """
 
-    def __init__(self, point: list, label: int = None, closest_centers: ClosestCentersList = None):
+    def __init__(self, point: list, index : int, label: int = None, closest_centers: ClosestCentersList = None):
         if len(point) != 3:
             raise ValueError("Point must have 3 coordinates.")
+        if index < 0:
+            raise ValueError("Index must be greater than 0.")
 
         self.point = point
+        self.index = index
         self.label = label
         self.closest_centers : ClosestCentersList = closest_centers
 
@@ -157,6 +161,12 @@ class LabeledPointsList:
         Return the list of points.
         """
         return [labeled_point.point for labeled_point in self.list]
+
+    def get_points_indices(self):
+        """
+        Return the list of points indices.
+        """
+        return [labeled_point.index for labeled_point in self.list]
 
     def get_labels(self):
         """
@@ -340,10 +350,10 @@ class SurfacePointsFrame:
 
         for i in range(len_labeled_points_list):
             points = surface_points[i].tolist()
-            label = surface_labels[i]
+            label = int(surface_labels[i])
             closest_centers = closest_centers_to_points[i]
 
-            labeled_point = LabeledPoint(points, label, closest_centers)
+            labeled_point = LabeledPoint(points, i, label, closest_centers)
 
             labeled_points_list.append(labeled_point)
 
@@ -588,7 +598,7 @@ class SurfacePointsFrame:
     # endregion
 
 
-    def filter_by_label(self, label_index):
+    def filter_by_cluster_label(self, label_index):
         """
         Filter the SurfaceData by the given label index, keeping only the corresponding points.
 
@@ -878,7 +888,7 @@ class SurfacePointsFrameList:
         filtered_data = []
 
         for surface_data_frame in new_surface_points_frame_list._list:
-            filtered_surface_data_frame = surface_data_frame.filter_by_label(label_index)
+            filtered_surface_data_frame = surface_data_frame.filter_by_cluster_label(label_index)
 
             filtered_data.append(filtered_surface_data_frame)
 
@@ -984,7 +994,7 @@ class SurfacePointsFrameList:
     #     """
     #     return [label for surface_data in self._list for label in surface_data.labels_list]
 
-    def get_unique_clusters_indexes(self):
+    def get_unique_clusters_indexes(self) -> list[int]:
         """
         Return the set of unique clusters.
         """
@@ -995,20 +1005,21 @@ class SurfacePointsFrameList:
             """
             unique_clusters = set()
             for surface_data in self._list:
-                if surface_data.labels_list is None or not surface_data.labels_list or surface_data.labels_list[
-                    0] == None:
+                if surface_data.labels_list is None or not surface_data.labels_list or surface_data.labels_list[0] == None:
                     raise ValueError("Labels list is empty.")
 
                 unique_clusters.update(
                     int(label) for label in surface_data.labels_list)  # Convert each sub-array to a tuple
             return unique_clusters
 
-        self.unique_clusters = compute_unique_clusters(self)
+        unique_clusters = compute_unique_clusters(self)
 
-        if self.unique_clusters is None or not self.unique_clusters:
+        if unique_clusters is None or not unique_clusters:
             raise Exception("Unique clusters is Empty")
 
-        return self.unique_clusters
+        unique_clusters = sorted(unique_clusters)
+
+        return unique_clusters
 
     # def select_random_points(self, num_points):
     #     """

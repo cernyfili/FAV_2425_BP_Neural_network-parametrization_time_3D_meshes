@@ -23,12 +23,14 @@ class NNDataset(Dataset):
 
         self.data = []
         for surface_data in surface_data_list.public_list:
-            points_all = surface_data.normalized_points_list
-            points_all = np.array(points_all)
+            labeled_points = surface_data.normalized_labeled_points_list
+
+            points_all = np.array(labeled_points.get_points())
+
+            point_indices = np.array(labeled_points.get_points_indices()).reshape(-1, 1)
 
             time_values = np.full((points_all.shape[0], 1), surface_data.time.value)
             time_index = np.full((points_all.shape[0], 1), surface_data.time.index)
-            point_indices = np.arange(points_all.shape[0]).reshape(-1, 1)
 
             points_with_info = np.hstack((points_all, time_values, time_index, point_indices))
             self.data.append(points_with_info)
@@ -44,6 +46,33 @@ class NNDataset(Dataset):
         inputs = self.data[idx]  # All columns as inputsis
         return inputs, targets
 
+
+    @staticmethod
+    def create_tensor(point_columns_tensor: torch.Tensor, time_value_column_tensor: torch.Tensor,
+                      time_index_column_tensor: torch.Tensor, point_indices_column_tensor: torch.Tensor) -> torch.Tensor:
+        """
+        Create a tensor in the format [x, y, z, time_value, time_index, point_indices].
+        :param point_columns_tensor: Tensor of points.
+        :param time_value_column_tensor: Tensor of time values.
+        :param time_index_column_tensor: Tensor of time indices.
+        :param point_indices_column_tensor: Tensor of point indices.
+        :return: Formatted tensor.
+        """
+        # check point_columns_tensor shape
+        if point_columns_tensor.shape[1] != 3:
+            raise ValueError("point_columns_tensor must have 3 columns")
+        # check time_value_column_tensor shape
+        if time_value_column_tensor.shape[1] != 1:
+            raise ValueError("time_value_column_tensor must have 1 column")
+        # check time_index_column_tensor shape
+        if time_index_column_tensor.shape[1] != 1:
+            raise ValueError("time_index_column_tensor must have 1 column")
+        # check point_indices_column_tensor shape
+        if point_indices_column_tensor.shape[1] != 1:
+            raise ValueError("point_indices_column_tensor must have 1 column")
+
+        return torch.cat((point_columns_tensor, time_value_column_tensor, time_index_column_tensor,
+                          point_indices_column_tensor), dim=1)
     @staticmethod
     def get_time_indices_column(input_tensor: torch.Tensor) -> torch.Tensor:
         return input_tensor[:, 4].unsqueeze(1)
@@ -51,6 +80,12 @@ class NNDataset(Dataset):
     @staticmethod
     def get_time_values_column(input_tensor: torch.Tensor) -> torch.Tensor:
         return input_tensor[:, 3].unsqueeze(1)
+
+    @staticmethod
+    def get_metadata(input_tensor: torch.Tensor) -> torch.Tensor:
+        # get columns which are not 0,1,2 (which is the points cordinates) but everything else
+        return input_tensor[:, 3:]
+
 
     @staticmethod
     def get_point_indices_column(input_tensor: torch.Tensor) -> torch.Tensor:

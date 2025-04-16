@@ -21,13 +21,14 @@ from utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_ST
 
 
 # region PRIVATE FUNCTIONS
-def _add_time_column(encoded_features, time_value):
-    device = encoded_features.device
+def tensor_add_time_column(tensor, time : TimeFrame):
+    device = tensor.device
+    time_value = time.value
     # Create a tensor of the same shape as the time feature in the input
-    time_tensor = torch.full((encoded_features.size(0), 1), time_value, dtype=torch.float32).to(device)
+    time_tensor = torch.full((tensor.size(0), 1), time_value, dtype=torch.float32).to(device)
     # Concatenate the encoded features with the time tensor
-    encoded_with_time = torch.cat((encoded_features, time_tensor), dim=1)
-    return encoded_with_time
+    tensor_with_time = torch.cat((tensor, time_tensor), dim=1)
+    return tensor_with_time
 
 
 # def __get_random_time(inputs: torch.Tensor) -> tuple[float, int]:
@@ -95,7 +96,7 @@ def __select_most_common_time_values(time_value_tensor: torch.Tensor, num_values
 #     return time_value_tensor, time_index_tensor
 
 
-def _run_through_encoder(inputs, encoder):
+def run_through_encoder(inputs, encoder):
     # remove last columen (time_index) from inputs
     inputs_encoder = NNDataset.get_encoder_input(inputs)
 
@@ -105,19 +106,19 @@ def _run_through_encoder(inputs, encoder):
     return encoded
 
 
-def _run_through_decoder_at_time(encoded_output : torch.tensor, decoder : callable, time : TimeFrame) -> torch.tensor:
-    decoder_input_data = _add_time_column(encoded_output, time.value)
+def run_through_decoder_at_time(encoded_output : torch.tensor, decoder : callable, time : TimeFrame) -> torch.tensor:
+    decoder_input_data = tensor_add_time_column(encoded_output, time)
     decoder_output = decoder(decoder_input_data)
     return decoder_output
 
 
 def run_through_nn_at_decoder_time(inputs : torch.tensor, model : callable, decoder_time: TimeFrame) -> torch.tensor:
-    encoder_output_data = _run_through_encoder(inputs, model.encoder)
-    decoder_output_data = _run_through_decoder_at_time(encoder_output_data, model.decoder, decoder_time)
+    encoder_output_data = run_through_encoder(inputs, model.encoder)
+    decoder_output_data = run_through_decoder_at_time(encoder_output_data, model.decoder, decoder_time)
     return decoder_output_data
 
 def run_through_nn_at_same_time(inputs : torch.tensor, model : callable) -> torch.tensor:
-    encoder_output_data = _run_through_encoder(inputs, model.encoder)
+    encoder_output_data = run_through_encoder(inputs, model.encoder)
 
     time_column = NNDataset.get_time_values_column(inputs)
     encoder_output_data_with_time = torch.cat((encoder_output_data, time_column), dim=1)
@@ -202,7 +203,7 @@ def __compute_loss_chamfer_distance_with_time_tensor(inputs: torch.Tensor, meshe
     """
     time_list_dict = {time.index: time for time in time_list}
 
-    encoded_features = _run_through_encoder(inputs, model.encoder)
+    encoded_features = run_through_encoder(inputs, model.encoder)
 
     time_index_tensor = NNDataset.get_time_indices_column(inputs)
 
@@ -225,7 +226,7 @@ def __compute_loss_chamfer_distance_with_time_tensor(inputs: torch.Tensor, meshe
         meshe = meshes_list.get_mesh_by_time_index(int(time_index))
 
 
-        decoded_mesh_v = _run_through_decoder_at_time(encoded_output=filtered_encoded_features, decoder= model.decoder, time=time_list_dict[time_index])
+        decoded_mesh_v = run_through_decoder_at_time(encoded_output=filtered_encoded_features, decoder= model.decoder, time=time_list_dict[time_index])
 
         # Compute one-way Chamfer Distance loss
         loss_chamfer = __compute_loss_one_way_chamfer_distance(original_mesh_v=meshe.vertices,
