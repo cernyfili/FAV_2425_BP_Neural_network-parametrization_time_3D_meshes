@@ -133,6 +133,9 @@ class MeshDataVisualizer:
             min_z = min(min_z, vertices[:, 2].min())
             max_z = max(max_z, vertices[:, 2].max())
 
+        min_axis = min(min_x, min_y, min_z)
+        max_axis = max(max_x, max_y, max_z)
+
 
         for time_index, mesh in trimesh_dict.items():
             processed_points_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.png')
@@ -162,9 +165,9 @@ class MeshDataVisualizer:
             ax.add_collection3d(poly_collection)
 
             # Set axis limits
-            ax.set_xlim(min_x, max_x)
-            ax.set_ylim(min_y, max_y)
-            ax.set_zlim(min_z, max_z)
+            ax.set_xlim(min_axis, max_axis)
+            ax.set_ylim(min_axis, max_axis)
+            ax.set_zlim(min_axis, max_axis)
 
             # Show the plot
             # Save the plot to a PNG file
