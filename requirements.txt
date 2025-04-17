@@ -1,10 +1,13 @@
 pandas
-matplotlib
+matplotlib~=3.6.3
 opencv-python
-trimesh
-numpy
+trimesh~=4.5.2
+numpy~=1.26.4
 
 igl
-scipy
-setuptools
+scipy~=1.11.4
+setuptools~=68.1.2
 sckit-learn
+jsonschema~=4.10.3
+torch~=2.5.1
+scikit-learn~=1.6.0

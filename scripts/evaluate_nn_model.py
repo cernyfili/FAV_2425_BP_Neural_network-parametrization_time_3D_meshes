@@ -15,8 +15,8 @@ data_folder = "data"
 processed_folder = "processed"
 raw_folder = "raw"
 
-DATA_FOLDERNAME = 'ball'
-SESSION_FOLDERNAME = "ball_20250410_132313"
+DATA_FOLDERNAME = 'ball_test'
+SESSION_FOLDERNAME = "ball_test_20250412_154944"
 CONFIG_JSON_FILENAME = "config.json"
 
 

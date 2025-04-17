@@ -190,17 +190,6 @@ def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualizat
     return __prepare_data_for_visualization(original_points_all_tensor, processed_points_all_tensor)
 
 
-def visualization_set_view_ax(ax):
-    min_value = -1
-    max_value = 1
-    ax.set_xlim(min_value, max_value)
-    ax.set_ylim(min_value, max_value)
-    ax.set_zlim(min_value, max_value)
-
-    # Set the initial view angle
-    ax.view_init(elev=-90, azim=90)  # Adjust these values as needed
-
-
 def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: SurfacePointsFrameList, time_index: int,
                                                             loaded_models: LoadedModelDic) -> tuple[
     list[torch.tensor], list[list[torch.tensor]]]:
