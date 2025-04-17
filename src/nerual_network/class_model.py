@@ -28,11 +28,12 @@ class NNDataset(Dataset):
             points_all = np.array(labeled_points.get_points())
 
             point_indices = np.array(labeled_points.get_points_indices()).reshape(-1, 1)
+            point_cluster_label = np.array(labeled_points.get_labels()).reshape(-1, 1)
 
             time_values = np.full((points_all.shape[0], 1), surface_data.time.value)
             time_index = np.full((points_all.shape[0], 1), surface_data.time.index)
 
-            points_with_info = np.hstack((points_all, time_values, time_index, point_indices))
+            points_with_info = np.hstack((points_all, time_values, time_index, point_indices, point_cluster_label))
             self.data.append(points_with_info)
 
         self.data = np.vstack(self.data)  # Shape: [total_points, feature_count]
@@ -49,13 +50,14 @@ class NNDataset(Dataset):
 
     @staticmethod
     def create_tensor(point_columns_tensor: torch.Tensor, time_value_column_tensor: torch.Tensor,
-                      time_index_column_tensor: torch.Tensor, point_indices_column_tensor: torch.Tensor) -> torch.Tensor:
+                      time_index_column_tensor: torch.Tensor, point_indices_column_tensor: torch.Tensor, point_cluster_label_column_tensor : torch.Tensor) -> torch.Tensor:
         """
         Create a tensor in the format [x, y, z, time_value, time_index, point_indices].
         :param point_columns_tensor: Tensor of points.
         :param time_value_column_tensor: Tensor of time values.
         :param time_index_column_tensor: Tensor of time indices.
         :param point_indices_column_tensor: Tensor of point indices.
+        :param point_cluster_label_column_tensor: Tensor of point cluster labels.
         :return: Formatted tensor.
         """
         # check point_columns_tensor shape
@@ -70,12 +72,38 @@ class NNDataset(Dataset):
         # check point_indices_column_tensor shape
         if point_indices_column_tensor.shape[1] != 1:
             raise ValueError("point_indices_column_tensor must have 1 column")
+        # check point_cluster_label_column_tensor shape
+        if point_cluster_label_column_tensor.shape[1] != 1:
+            raise ValueError("point_cluster_label_column_tensor must have 1 column")
 
         return torch.cat((point_columns_tensor, time_value_column_tensor, time_index_column_tensor,
-                          point_indices_column_tensor), dim=1)
+                          point_indices_column_tensor, point_cluster_label_column_tensor), dim=1)
+
+    #input_tensor = NNDataset.filter_by_cluster_label(input_tensor=original_points_frame_tensor, cluster_index=cluster_index)
+    @staticmethod
+    def filter_by_cluster_label(input_tensor: torch.Tensor, cluster_index: int) -> torch.Tensor:
+        """
+        Filter the input tensor by the cluster index.
+
+        Args:
+            input_tensor (torch.Tensor): The input tensor.
+            cluster_index (int): The cluster index to filter by.
+
+        Returns:
+            torch.Tensor: The filtered tensor.
+        """
+        point_cluster_label_column = NNDataset.get_point_cluster_label_column(input_tensor)
+        mask = (point_cluster_label_column == cluster_index).squeeze()
+        return_tensor = input_tensor[mask]
+        return return_tensor
+
     @staticmethod
     def get_time_indices_column(input_tensor: torch.Tensor) -> torch.Tensor:
         return input_tensor[:, 4].unsqueeze(1)
+
+    @staticmethod
+    def get_point_cluster_label_column(input_tensor: torch.Tensor) -> torch.Tensor:
+        return input_tensor[:, 6].unsqueeze(1)
 
     @staticmethod
     def get_time_values_column(input_tensor: torch.Tensor) -> torch.Tensor:

@@ -2,16 +2,15 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 import numpy as np
-import torch
 import trimesh
 from numpy import ndarray
 from scipy.spatial import KDTree
 from sklearn.decomposition import PCA
-from sklearn.linear_model.tests.test_perceptron import indices
 from sklearn.preprocessing import StandardScaler
 from trimesh import Trimesh
 
 from utils.constants import CDataPreprocessing
+
 
 @dataclass
 class NormalizedSetttings:
@@ -84,8 +83,9 @@ class LabeledPoint:
 
         # normalize Labeled points
         original_point = self.point
-        normalized_point = (original_point - normalized_settings.shift_vector) / normalized_settings.max_norm
-        self.point = normalized_point
+        for i in range(len(original_point)):
+           normalized_point = (original_point[i] - normalized_settings.shift_vector[i]) / normalized_settings.max_norm
+           self.point[i] = normalized_point
 
     def __repr__(self):
         return f"LabeledPoint(point={self.point}, label={self.label})"
@@ -425,6 +425,35 @@ class SurfacePointsFrame:
         self.normalize_labeled_points(normalized_settings)
         self._normalize_mesh(normalized_settings)
         self._normalize_centers_info(normalized_settings)
+
+        # SANITY CHECK
+        max_point_value = 1.0
+        min_point_value = -1.0
+
+        # check if normalized labeld points are normalized
+        normalized_points = np.array(self._normalized_labeled_points_list.get_points())
+        original_points = np.array(self._original_labeled_points_list.get_points())
+        if not np.all((normalized_points >= min_point_value) & (normalized_points <= max_point_value)):
+            raise ValueError("Normalized points are not in the range [-1, 1].")
+        if not normalized_points.shape == original_points.shape:
+            raise ValueError("Normalized points shape does not match original points shape.")
+
+        # check if normalized mesh is normalized
+        normalized_mesh = np.array(self._normalized_mesh.vertices)
+        original_mesh = np.array(self._original_mesh.vertices)
+        if not normalized_mesh.shape == original_mesh.shape:
+            raise ValueError("Normalized mesh shape does not match original mesh shape.")
+        if not np.all((normalized_mesh >= min_point_value) & (normalized_mesh <= max_point_value)):
+            raise ValueError("Normalized points mesh are not in the range [-1, 1].")
+
+        # check if normalized centers info is normalized
+        normalized_centers_info = np.array(self._normalized_centers_info.points)
+        original_centers_info = np.array(self._original_centers_info.points)
+        if not normalized_centers_info.shape == original_centers_info.shape:
+            raise ValueError("Normalized centers info shape does not match original centers info shape.")
+        if not np.all((normalized_centers_info >= min_point_value) & (normalized_centers_info <= max_point_value)):
+            raise ValueError("Normalized points centers info are not in the range [-1, 1].")
+
 
 
     @staticmethod

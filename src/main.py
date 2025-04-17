@@ -73,14 +73,14 @@ def main():
     ]
 
     if TEST_MODE:
-        data_folders = ["ball_test"]
+        train_config_list = [
+            TrainConfig(nn_config=NNConfig(nn_max_epochs=5, nn_patience=nn_patience, nn_batch_size=nn_batch_size,
+                                           nn_model=ModelType.SIMPLE_MLP_04, nn_lr=nn_lr, loss_function_type=LossFunctionType.STANDARD),
+                        file_path_config=FilePathConfig.create_test_mode(data_foldername="ball_test"),
+                        num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=500,
+                        time_steps=CDataPreprocessing.MAX_TIME_STEPS)]
 
     for train_config in train_config_list:
-
-        if TEST_MODE:
-            train_config.nn_config.max_epochs = 5
-            train_config.num_surface_points = 5000
-
 
         train_config.save_to_json(os.path.join(train_config.file_path_config.processed_session_folderpath, "config.json"))
 

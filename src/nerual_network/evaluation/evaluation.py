@@ -13,7 +13,7 @@ from scipy.sparse.linalg import eigsh
 from torch.utils.data import DataLoader
 
 from data_processing.class_clustering import ClusteredCenterPointsAllFrames
-from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame, SurfacePointsFrame
+from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame, SurfacePointsFrame, MeshList
 from data_processing.mapping import categorize_points_with_labels
 from nerual_network.helpers import _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization, \
     _run_model_decoder_all_times_with_selected_encoder_time, NNOutputForVisualization, \
@@ -1050,6 +1050,42 @@ def __save_pointcloud_to_file(processed_data : NNOutputForVisualization, images_
         np.savetxt(processed_points_filepath, processed_points_one_time_value, delimiter=",")
         logging.info(f"Saved processed points to {processed_points_filepath}")
 
+def create_mesh_surfacedatalist(clustered_data : ClusteredCenterPointsAllFrames, surface_data_list : SurfacePointsFrameList) -> SurfacePointsFrameList:
+    original_loaded_meshes = surface_data_list.get_original_meshes_list()
+
+    mesh_surface_points_frame_list = SurfacePointsFrameList([])
+
+    for original_mesh in original_loaded_meshes:
+        time_index = original_mesh[0]
+        mesh = original_mesh[1]
+
+        mesh_vertices = np.array(mesh.vertices)
+
+        ## Categorize points
+        centers_labels_frame = clustered_data.labels_frame
+        centers_points_frame = clustered_data.points_allframes[time_index]
+        labels = categorize_points_with_labels(centers_labels_frame, centers_points_frame, mesh_vertices)
+
+        ## Create Surface data
+        mesh_surface_points_frame = SurfacePointsFrame.create_instance(surface_points=mesh_vertices,
+                                                                       surface_labels=labels, mesh=mesh,
+                                                                       centers_points=centers_points_frame)
+
+        ## region get time value
+        surface_data_frame = surface_data_list.get_element_by_time_index(time_index)
+        if surface_data_frame is None:
+            logging.error(f"Surface data frame for time index {time_index} could not be found. Exiting.")
+            raise ValueError(f"Surface data frame for time index {time_index} could not be found. Exiting.")
+
+        time_value = surface_data_frame.time.value
+        ## endregion
+
+        mesh_surface_points_frame.time = TimeFrame(index=time_index, value=time_value)
+        # endregion
+
+        mesh_surface_points_frame_list.append(mesh_surface_points_frame)
+
+    return mesh_surface_points_frame_list
 
 def process_mesh_through_model(origin_mesh_data: MeshData, train_config: TrainConfig,
                                loaded_models : LoadedModelDic) -> ProcessedMeshData | None:
@@ -1081,39 +1117,8 @@ def process_mesh_through_model(origin_mesh_data: MeshData, train_config: TrainCo
 
     # create surface data list where input vertices are meshes vertices and they are clustered by labels
 
-    original_loaded_meshes = surface_data_list.get_original_meshes_list()
-
-    mesh_surface_points_frame_list = SurfacePointsFrameList([])
-
-    for original_mesh in original_loaded_meshes:
-        time_index = original_mesh[0]
-        mesh = original_mesh[1]
-
-        mesh_vertices = np.array(mesh.vertices)
-
-        ## Categorize points
-        centers_labels_frame = clustered_data.labels_frame
-        centers_points_frame = clustered_data.points_allframes[time_index]
-        labels = categorize_points_with_labels(centers_labels_frame, centers_points_frame, mesh_vertices)
-
-        ## Create Surface data
-        mesh_surface_points_frame = SurfacePointsFrame.create_instance(surface_points=mesh_vertices,
-                                                                       surface_labels=labels, mesh=mesh,
-                                                                       centers_points=centers_points_frame)
-
-        ## region get time value
-        surface_data_frame = surface_data_list.get_element_by_time_index(time_index)
-        if surface_data_frame is None:
-            logging.error(f"Surface data frame for time index {time_index} could not be found. Exiting.")
-            return
-
-        time_value = surface_data_frame.time.value
-        ## endregion
-
-        mesh_surface_points_frame.time = TimeFrame(index=time_index, value=time_value)
-        # endregion
-
-        mesh_surface_points_frame_list.append(mesh_surface_points_frame)
+    mesh_surface_points_frame_list: SurfacePointsFrameList = create_mesh_surfacedatalist(clustered_data=
+        clustered_data, surface_data_list=surface_data_list)
 
     # endregion
 
@@ -1139,8 +1144,6 @@ def process_mesh_through_model(origin_mesh_data: MeshData, train_config: TrainCo
         denormalized_points = SurfacePointsFrameList.denormalize_points(surface_data_list.normalize_values, processed_points_one_time_value)
         denormalized_points_split_by_time_value[time_index] = denormalized_points
 
-    origin_mesh = original_loaded_meshes[origin_mesh_data.time_index]
-    if origin_mesh[0] != origin_mesh_data.time_index:
-        raise ValueError("Time index of origin mesh does not match the time index of the mesh data")
+    origin_mesh = input_model_data.get_element_by_time_index(origin_mesh_data.time_index).original_mesh
     return ProcessedMeshData(
-        NNOutputForVisualization(rgb_colors=visualization_data.rgb_colors, processed_points=denormalized_points_split_by_time_value), origin_mesh[1])
+        NNOutputForVisualization(rgb_colors=visualization_data.rgb_colors, processed_points=denormalized_points_split_by_time_value), origin_mesh)

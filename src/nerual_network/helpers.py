@@ -206,20 +206,19 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
     # select original points where time is 0
     original_points_frame = surface_data_list.get_element_by_time_index(time_index)
 
+    original_points_frame_dataset = NNDataset(SurfacePointsFrameList([original_points_frame]))
+    original_points_frame_tensor = torch.tensor(original_points_frame_dataset.data, dtype=torch.float32).to(device)
+
     # iterate over clusters
     for cluster_index in unique_clusters:
         # Load the trained model for the current cluster
         model = loaded_models[ClusterIndex(cluster_index)]
 
-        # Load the original surface points for the current cluster
-        surface_data_cluster_timeframe = original_points_frame.filter_by_cluster_label(cluster_index)
-
-        # Create a SurfaceDataset instance with the filtered surface data
-        original_points_dataset_one_cluster = NNDataset(SurfacePointsFrameList([surface_data_cluster_timeframe]))
         # Prepare a DataLoader for original points
-        input_tensor = torch.tensor(original_points_dataset_one_cluster.data, dtype=torch.float32).to(device)
+        input_tensor = NNDataset.filter_by_cluster_label(input_tensor=original_points_frame_tensor, cluster_index=cluster_index)
 
         input_tensor_point_indices = NNDataset.get_point_indices_column(input_tensor)
+        input_tensor_point_labels = NNDataset.get_point_cluster_label_column(input_tensor)
 
         original_points_all.append(input_tensor)  # You can store the numpy array directly
 
@@ -252,7 +251,8 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
             decoded_output_tensor_with_metadata = NNDataset.create_tensor(point_columns_tensor=decoded_output_tensor,
                                                                            time_value_column_tensor=time_value_tensor,
                                                                             time_index_column_tensor=time_index_tensor,
-                                                                            point_indices_column_tensor=input_tensor_point_indices)
+                                                                            point_indices_column_tensor=input_tensor_point_indices,
+                                                                          point_cluster_label_column_tensor=input_tensor_point_labels)
 
             # Append the modified decoded output
             processed_points_one_cluster.append(decoded_output_tensor_with_metadata)
