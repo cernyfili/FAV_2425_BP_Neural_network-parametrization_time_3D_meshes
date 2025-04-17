@@ -1,11 +1,12 @@
 import json
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from jsonschema import validate, ValidationError
 
-TEST_MODE = True
+TEST_MODE = False
 
 # Restrict access to only uppercase constants
 def __getattr__(name):
@@ -66,8 +67,8 @@ clustered_data_filename = 'clustered_data.pkl'
 log_file_filename = 'application.log'
 point_cloud_original_filename = "original_points_all.csv"
 point_cloud_processed_filename = "processed_points_all.csv"
-center_metric_eval = "center_metric_eval.txt"
-center_metric_variances = "center_metric_variances.txt"
+center_metric_eval = "center_metric_eval"
+center_metric_variances = "center_metric_variances"
 mesh_shape_metrics = "mesh_shape_metrics.txt"
 evaluation_folder_name = "evaluation"
 
@@ -314,7 +315,7 @@ class TrainConfig:
 
         try:
             validate(instance=config_dict, schema=schema)
-            print("JSON is valid")
+            logging.info("JSON is valid")
         except ValidationError as e:
             raise ValueError(f"JSON is invalid: {e.message}")
 

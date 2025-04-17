@@ -252,7 +252,7 @@ def _visualize_original_and_processed_points(original_points_all, processed_poin
     print(f"Saved processed surface points image at {processed_image_path}")
 
 
-def _prepare_export_data(surface_data_list, train_config: TrainConfig, loaded_models : LoadedModelDic):
+def _prepare_export_data(surface_data_list : SurfacePointsFrameList, train_config: TrainConfig, loaded_models : LoadedModelDic):
     logging.info("START: Preparing data for visualization")
     model_weights_template = train_config.file_path_config.model_weights_folderpath_template
     batch_size = train_config.nn_config.batch_size
@@ -265,7 +265,7 @@ def _prepare_export_data(surface_data_list, train_config: TrainConfig, loaded_mo
     for cluster_index in unique_clusters:
 
         # Load the original surface points for the current cluster
-        surface_data_cluster = surface_data_list.filter_by_cluster_label(cluster_index)
+        surface_data_cluster = surface_data_list.filter_by_label(cluster_index)
 
         # Create a SurfaceDataset instance with the filtered surface data
         original_points_dataset = NNDataset(surface_data_cluster)
@@ -927,9 +927,9 @@ def evaluate(train_config: TrainConfig):
 
 
     # region Save Evaluation files
-    save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config)
-
-    save_centers_pipeline(evaluation_folderpath, surface_data_list)
+    # save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config)
+    #
+    # save_centers_pipeline(evaluation_folderpath, surface_data_list)
 
     # region Bundle
     original_points_all, processed_points_all, cluster_labels = _prepare_export_data(

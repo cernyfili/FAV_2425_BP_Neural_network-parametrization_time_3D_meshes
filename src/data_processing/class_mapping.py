@@ -70,9 +70,9 @@ class LabeledPoint:
         if index < 0:
             raise ValueError("Index must be greater than 0.")
 
-        self.point = point
-        self.index = index
-        self.label = label
+        self.point : list = point
+        self.index : int = index
+        self.label : int = label
         self.closest_centers : ClosestCentersList = closest_centers
 
     def normalize(self, normalized_settings : NormalizedSetttings):
