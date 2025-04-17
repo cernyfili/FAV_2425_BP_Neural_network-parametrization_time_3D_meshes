@@ -1,6 +1,7 @@
 import logging
 import os
 
+from main import preprocess_data
 from nerual_network.evaluation.evaluation import evaluate
 from utils.constants import FilePathConfig, DEFAULT_TRAIN_CONFIG, ModelType, LossFunctionType, TrainConfig
 
@@ -14,8 +15,8 @@ data_folder = "data"
 processed_folder = "processed"
 raw_folder = "raw"
 
-DATA_FOLDERNAME = 'ball_test'
-SESSION_FOLDERNAME = "ball_test_20250412_154944"
+DATA_FOLDERNAME = 'ball'
+SESSION_FOLDERNAME = "ball_20250410_132313"
 CONFIG_JSON_FILENAME = "config.json"
 
 
@@ -34,5 +35,7 @@ file_path_config = FilePathConfig.create_test_mode(
                            )
 
 train_config = TrainConfig.from_json(config_json_filepath, file_path_config)
+
+preprocess_data(train_config)
 
 evaluate(train_config)

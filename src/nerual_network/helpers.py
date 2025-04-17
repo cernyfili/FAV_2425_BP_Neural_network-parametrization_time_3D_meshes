@@ -22,8 +22,8 @@ from nerual_network.loss_functions import run_through_encoder, run_through_decod
 from utils.constants import TrainConfig, NN_DEVICE_STR, ModelType
 from utils.nn_config_utils import init_training_config, init_model
 
-RGBColorArray : TypeAlias = np.ndarray
-ProcessedPointsListSplitByTimeValue : TypeAlias = dict[int, np.ndarray]
+RGBColorArray: TypeAlias = np.ndarray
+ProcessedPointsListSplitByTimeValue: TypeAlias = dict[int, np.ndarray]
 
 
 class ClusterIndex(int):
@@ -44,6 +44,7 @@ class VisualizationData:
 class LoadedModelDic(Dict[ClusterIndex, nn.Module]):
     pass
 
+
 @dataclass
 class CentersMetricsInfo:
     data: SurfacePointsFrameList
@@ -56,6 +57,7 @@ class NNOutputForVisualization:
     rgb_colors: RGBColorArray
     processed_points: ProcessedPointsListSplitByTimeValue
 
+
 #
 # def get_closest_centers_indices(closest_centers_indicies_all_frames : np.ndarray, inputs : torch.tensor, input_time_index : int) -> np.ndarray:
 #     inputs_points_index_column = NNDataset.get_point_indices_column(inputs)
@@ -66,8 +68,8 @@ class NNOutputForVisualization:
 
 
 def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
-        surface_data_list: SurfacePointsFrameList, time_index: int, loaded_models : LoadedModelDic) -> NNOutputForVisualization:
-
+        surface_data_list: SurfacePointsFrameList, time_index: int,
+        loaded_models: LoadedModelDic) -> NNOutputForVisualization:
     def __prepare_data_for_visualization(original_points_all: list[torch.tensor],
                                          processed_points_all: list[list[torch.tensor]]) -> NNOutputForVisualization:
         """
@@ -100,7 +102,7 @@ def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualizat
         # endregion
 
         # sort by point index
-        #indices = torch.lexsort([NNDataset.get_point_indices_column(original_points_combined)])
+        # indices = torch.lexsort([NNDataset.get_point_indices_column(original_points_combined)])
         indices = torch.argsort(NNDataset.get_point_indices_column(original_points_combined).squeeze(), dim=0)
         original_points_combined_sorted = original_points_combined[indices]
 
@@ -110,6 +112,11 @@ def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualizat
         # convert it to numpy
         original_points_combined_only_points_numpy = original_points_combined_only_points.cpu().detach().numpy()
 
+        # check if normalized to -1 to 1
+        if np.min(original_points_combined_only_points_numpy) < -1 or np.max(
+                original_points_combined_only_points_numpy) > 1:
+            raise ValueError("Original points must be normalized to -1 to 1.")
+
         rgb_colors = __convert_points_to_colors(original_points_combined_only_points_numpy)
         # endregion
 
@@ -118,13 +125,14 @@ def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualizat
         processed_points_combined = torch.cat([torch.cat(points, dim=0) for points in processed_points_all], dim=0)
 
         # sort by time index
-        indices = torch.argsort(NNDataset.get_time_indices_column(processed_points_combined).squeeze(),dim=0)
+        indices = torch.argsort(NNDataset.get_time_indices_column(processed_points_combined).squeeze(), dim=0)
         processed_points_combined_sorted = processed_points_combined[indices]
 
         # create dic of processed points split by time index
-        processed_points_split_by_time_index : dict[int, np.ndarray] = dict()
+        processed_points_split_by_time_index: dict[int, np.ndarray] = dict()
         # iterate over time indices
-        unique_time_indices = torch.unique(NNDataset.get_time_indices_column(processed_points_combined_sorted).squeeze())
+        unique_time_indices = torch.unique(
+            NNDataset.get_time_indices_column(processed_points_combined_sorted).squeeze())
         if unique_time_indices.numel() <= 1:
             raise ValueError("There must be more than one time index in processed points.")
 
@@ -161,13 +169,15 @@ def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualizat
             # endregion
 
             # select only points
-            processed_points_filtered_sorted_only_points = NNDataset.get_points_columns(processed_points_filtered_sorted)
+            processed_points_filtered_sorted_only_points = NNDataset.get_points_columns(
+                processed_points_filtered_sorted)
 
             # convert it to numpy
             processed_points_filtered_sorted_only_points_numpy = processed_points_filtered_sorted_only_points.detach().cpu().numpy()
 
             # add to list
-            processed_points_split_by_time_index[int(current_time_index)] = processed_points_filtered_sorted_only_points_numpy
+            processed_points_split_by_time_index[
+                int(current_time_index)] = processed_points_filtered_sorted_only_points_numpy
 
         # endregion
 
@@ -180,8 +190,19 @@ def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualizat
     return __prepare_data_for_visualization(original_points_all_tensor, processed_points_all_tensor)
 
 
+def visualization_set_view_ax(ax):
+    min_value = -1
+    max_value = 1
+    ax.set_xlim(min_value, max_value)
+    ax.set_ylim(min_value, max_value)
+    ax.set_zlim(min_value, max_value)
+
+    # Set the initial view angle
+    ax.view_init(elev=-90, azim=90)  # Adjust these values as needed
+
+
 def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: SurfacePointsFrameList, time_index: int,
-                                                            loaded_models : LoadedModelDic) -> tuple[
+                                                            loaded_models: LoadedModelDic) -> tuple[
     list[torch.tensor], list[list[torch.tensor]]]:
     """
 
@@ -215,7 +236,8 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
         model = loaded_models[ClusterIndex(cluster_index)]
 
         # Prepare a DataLoader for original points
-        input_tensor = NNDataset.filter_by_cluster_label(input_tensor=original_points_frame_tensor, cluster_index=cluster_index)
+        input_tensor = NNDataset.filter_by_cluster_label(input_tensor=original_points_frame_tensor,
+                                                         cluster_index=cluster_index)
 
         input_tensor_point_indices = NNDataset.get_point_indices_column(input_tensor)
         input_tensor_point_labels = NNDataset.get_point_cluster_label_column(input_tensor)
@@ -249,9 +271,9 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
 
             # add columns (x,y,z) from decoded_output_tensor and metadata columns from input_tensor_metadata
             decoded_output_tensor_with_metadata = NNDataset.create_tensor(point_columns_tensor=decoded_output_tensor,
-                                                                           time_value_column_tensor=time_value_tensor,
-                                                                            time_index_column_tensor=time_index_tensor,
-                                                                            point_indices_column_tensor=input_tensor_point_indices,
+                                                                          time_value_column_tensor=time_value_tensor,
+                                                                          time_index_column_tensor=time_index_tensor,
+                                                                          point_indices_column_tensor=input_tensor_point_indices,
                                                                           point_cluster_label_column_tensor=input_tensor_point_labels)
 
             # Append the modified decoded output
@@ -319,8 +341,8 @@ def _load_trained_model(model_weights_filepath: str, train_config: TrainConfig):
 
 
 def load_trained_nn_from_files(train_config: TrainConfig) -> LoadedModelDic:
-
-    logging.info(f"START: loading nn from model weights files {train_config.file_path_config.model_weights_folderpath_template}")
+    logging.info(
+        f"START: loading nn from model weights files {train_config.file_path_config.model_weights_folderpath_template}")
     loaded_models = LoadedModelDic()
     num_clusters = train_config.num_clusters
     model_type = train_config.nn_config.model_type
@@ -337,8 +359,8 @@ def load_trained_nn_from_files(train_config: TrainConfig) -> LoadedModelDic:
     return loaded_models
 
 
-MeshStruct : TypeAlias = Trimesh
-Folderpath : TypeAlias = str
+MeshStruct: TypeAlias = Trimesh
+Folderpath: TypeAlias = str
 
 
 @dataclass

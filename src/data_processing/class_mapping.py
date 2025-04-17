@@ -427,8 +427,8 @@ class SurfacePointsFrame:
         self._normalize_centers_info(normalized_settings)
 
         # SANITY CHECK
-        max_point_value = 1.0
-        min_point_value = -1.0
+        max_point_value = 1
+        min_point_value = -1
 
         # check if normalized labeld points are normalized
         normalized_points = np.array(self._normalized_labeled_points_list.get_points())
