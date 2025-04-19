@@ -305,22 +305,31 @@ def _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_fo
 
 
 def _create_save_surface_data(clustered_data: ClusteredCenterPointsAllFrames, num_surface_points, meshes_folder_path,
-                              surface_data_filepath):
+                              surface_data_filepath, session_surface_data_filepath):
     surface_data_list = _pipeline_prepare_surface_data(clustered_data, num_surface_points, meshes_folder_path)
 
     # save the surface data list
     with open(surface_data_filepath, 'wb') as f:
         pickle.dump(surface_data_list, f)
+    # save the session surface data list
+    with open(session_surface_data_filepath, 'wb') as f:
+        pickle.dump(surface_data_list, f)
 
 
 # Function to process and save neural network data if not already processed
-def process_surface_data(num_surface_points, meshes_folder_path, surface_data_filepath, clustered_data_filepath):
+def process_surface_data(num_surface_points, meshes_folder_path, surface_data_filepath, clustered_data_filepath, session_surface_data_filepath):
     if not os.path.exists(surface_data_filepath):
         clustered_centers = load_pickle_file(clustered_data_filepath)
         if clustered_centers is None:
             logging.error("Clustered data could not be loaded. Exiting.")
             return
-        _create_save_surface_data(clustered_centers, num_surface_points, meshes_folder_path, surface_data_filepath)
+        _create_save_surface_data(clustered_centers, num_surface_points, meshes_folder_path, surface_data_filepath, session_surface_data_filepath)
         logging.info("Neural network data processed and saved.")
     else:
+        # copy the file to session folder
+        with open(surface_data_filepath, 'rb') as f:
+            surface_data_list = pickle.load(f)
+        with open(session_surface_data_filepath, 'wb') as f:
+            pickle.dump(surface_data_list, f)
+
         logging.info("Neural network data already processed.")

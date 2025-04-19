@@ -1,11 +1,20 @@
+import json
 import logging
 import os
 
-from nerual_network.evaluation.meshes import process_mesh_through_model, MeshDataVisualizer
+import torch
+
+from data_processing.class_clustering import ClusteredCenterPointsAllFrames
+from data_processing.class_mapping import SurfacePointsFrameList
+from nerual_network.evaluation.meshes import process_mesh_through_model_pipeline, MeshDataVisualizer, \
+    process_mesh_through_model
+from nerual_network.evaluation.metrics import compute_save_centers_metrics, compute_mesh_metrics
 from nerual_network.evaluation.visualization import _visualize_all_clusters_for_each_time, \
     _visualize_combined_surface_points_for_each_time, _visualize_points_with_time, \
-    _visualize_original_and_processed_points, _prepare_export_data, visualize_uv_points_in_3d, save_visualize_centers
-from nerual_network.helpers import load_trained_nn_from_files, MeshData
+    _visualize_original_and_processed_points, _prepare_export_data, visualize_uv_points_in_3d, save_visualize_centers, \
+    _save_pointcloud_to_file, _create_pointclouds_from_time_to_all_times
+from nerual_network.helpers import load_trained_nn_from_files, MeshData, CentersMetricsInfo, create_timestemp_dir, \
+    MeshFilepathsDic, TimeIndex, FilePath, LoadedModelDic
 from utils.constants import TrainConfig
 from utils.helpers import load_pickle_file
 
@@ -187,10 +196,34 @@ def __getattr__(name):
 
 
 # create an alias type for an model dictionary where key is cluster index
-
-
 def evaluate(train_config: TrainConfig):
-    surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
+    """
+    Evaluates the model by loading the trained model and running it through the data.
+    :param train_config:
+    :return:
+    """
+    evaluate_partial(train_config)
+    #evaluate_full(train_config)
+
+def evaluate_partial(train_config: TrainConfig):
+    surface_data_list = load_pickle_file(train_config.file_path_config.session_surface_data_filepath)
+
+    if surface_data_list is None or surface_data_list.public_list is None:
+        logging.error("Surface data list could not be loaded. Exiting.")
+        return
+
+    evaluation_folderpath = train_config.file_path_config.evaluation_folderpath
+
+    loaded_models = load_trained_nn_from_files(train_config)
+
+    save_mesh_shape_metrics_pipeline(evaluation_folderpath=evaluation_folderpath,
+                                      surface_data_list=surface_data_list,
+                                      train_config=train_config,
+                                     loaded_models=loaded_models,
+                                     mesh_time_index=0)
+
+def evaluate_full(train_config: TrainConfig):
+    surface_data_list = load_pickle_file(train_config.file_path_config.session_surface_data_filepath)
 
     if surface_data_list is None or surface_data_list.public_list is None:
         logging.error("Surface data list could not be loaded. Exiting.")
@@ -202,46 +235,46 @@ def evaluate(train_config: TrainConfig):
 
 
     # region Save Evaluation files
-    save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config)
+    save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config, 0)
 
-    # save_centers_pipeline(evaluation_folderpath, surface_data_list)
-    #
-    # # region Bundle
-    # original_points_all, processed_points_all = _prepare_export_data(
-    #      surface_data_list=surface_data_list, loaded_models=loaded_models)
-    #
-    # _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
-    #                                                  os.path.join(evaluation_folderpath,
-    #                                                               "time_combined_only_processed"))
-    # _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(evaluation_folderpath, "time_clusters"))
-    #
-    # _visualize_points_with_time(original_points_all, processed_points_all, evaluation_folderpath)
-    # # # Save the combined image
-    # _visualize_original_and_processed_points(original_points_all, processed_points_all, evaluation_folderpath)
+    save_centers_pipeline(evaluation_folderpath, surface_data_list)
+
+    # region Bundle
+    original_points_all, processed_points_all = _prepare_export_data(
+         surface_data_list=surface_data_list, loaded_models=loaded_models)
+
+    _visualize_combined_surface_points_for_each_time(original_points_all, processed_points_all,
+                                                     os.path.join(evaluation_folderpath,
+                                                                  "time_combined_only_processed"))
+    _visualize_all_clusters_for_each_time(surface_data_list, os.path.join(evaluation_folderpath, "time_clusters"))
+
+    _visualize_points_with_time(original_points_all, processed_points_all, evaluation_folderpath)
+    # Save the combined image
+    _visualize_original_and_processed_points(original_points_all, processed_points_all, evaluation_folderpath)
 
     point_cloud_original_filepath = train_config.file_path_config.point_cloud_original_filepath
     point_cloud_processed_filepath = train_config.file_path_config.point_cloud_processed_filepath
-    # _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
-    #                          point_cloud_processed_filepath)
+    _save_pointcloud_to_file(original_points_all, processed_points_all, point_cloud_original_filepath,
+                              point_cloud_processed_filepath)
     # endregion
 
-    # visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-    #                           images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_0"),
-    #                           time_index=0, loaded_models=loaded_models, modulo=5)
-    #
-    # visualize_uv_points_in_3d(surface_data_list=surface_data_list,
-    #                           images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_59"),
-    #                           time_index=59, loaded_models=loaded_models, modulo=5)
+    visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+                              images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_0"),
+                              time_index=0, loaded_models=loaded_models, modulo=5)
 
-    # _create_pointclouds_from_time_to_all_times(surface_data_list=surface_data_list,
-    #                                            images_save_folderpath=os.path.join(evaluation_folderpath,
-    #                                                                                "point_clouds_all_times_time_0"),
-    #                                            time_index=0, loaded_models=loaded_models)
+    visualize_uv_points_in_3d(surface_data_list=surface_data_list,
+                              images_save_folderpath=os.path.join(evaluation_folderpath, "time_uv_points_59"),
+                              time_index=59, loaded_models=loaded_models, modulo=5)
+
+    _create_pointclouds_from_time_to_all_times(surface_data_list=surface_data_list,
+                                               images_save_folderpath=os.path.join(evaluation_folderpath,
+                                                                                   "point_clouds_all_times_time_0"),
+                                               time_index=0, loaded_models=loaded_models)
 
     # endregion
 
     # region Save Metrics
-    #save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list, train_config)
+    save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list, train_config)
     # mesh_shape_metrics = _compute_mesh_shape_metrics(surface_data_list, train_config, clustered_data)
     # # save mesh_shape_metrics to file
     # with open(train_config.file_path_config.mesh_shape_metrics_filepath, "w") as file:
@@ -253,12 +286,68 @@ def save_centers_pipeline(evaluation_folderpath, surface_data_list):
     centers_image_foldername = "centers_img"
     centers_image_folderpath = os.path.join(evaluation_folderpath, centers_image_foldername)
     os.makedirs(centers_image_folderpath, exist_ok=True)
+
+    centers_image_folderpath = create_timestemp_dir(centers_image_folderpath)
+
     save_visualize_centers(surface_data_list, centers_image_folderpath)
 
 
-def save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config):
-    processed_data = process_mesh_through_model(MeshData(time_index=0), train_config, loaded_models)
+def save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config, mesh_time_index : int) -> None:
+    processed_data = process_mesh_through_model_pipeline(MeshData(time_index=mesh_time_index), train_config, loaded_models)
     visualizer = MeshDataVisualizer(processed_data)
     mesh_files_folderpath = os.path.join(evaluation_folderpath, "mesh_files")
     os.makedirs(mesh_files_folderpath, exist_ok=True)
     visualizer.save_img_of_meshes(mesh_files_folderpath)
+
+
+def save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list, train_config):
+    eval_surface_points_num = 10
+    folder_path = os.path.join(evaluation_folderpath, "centers_metrics")
+    os.makedirs(folder_path, exist_ok=True)
+    folder_path = create_timestemp_dir(folder_path)
+
+    compute_save_centers_metrics(
+        CentersMetricsInfo(surface_data_list, loaded_models, eval_surface_points_num),
+        folder_path)
+
+def save_mesh_shape_metrics_pipeline(evaluation_folderpath : str, surface_data_list : SurfacePointsFrameList, train_config : TrainConfig, loaded_models : LoadedModelDic, mesh_time_index : int):
+    # region STEP Read clustered data, surface data
+    clustered_data: ClusteredCenterPointsAllFrames = load_pickle_file(
+        train_config.file_path_config.session_clustered_data_filepath)
+    if clustered_data is None:
+        logging.error("Clustered data could not be loaded. Exiting.")
+        return None
+
+    processed_data = process_mesh_through_model(origin_mesh_data=MeshData(time_index=mesh_time_index),
+                                                loaded_models=loaded_models,
+                                                clustered_data=clustered_data,
+                                                surface_data_list=surface_data_list
+                                                )
+    visualizer = MeshDataVisualizer(processed_data)
+
+    metrics_folderpath = os.path.join(evaluation_folderpath, "mesh_shape_metrics")
+    os.makedirs(metrics_folderpath, exist_ok=True)
+
+    mesh_files_folderpath = os.path.join(metrics_folderpath, "meshes")
+    os.makedirs(mesh_files_folderpath, exist_ok=True)
+
+    # Save origin mesh
+    origin_meshes_list = surface_data_list.get_original_meshes_list()
+    origin_meshes_filepaths = MeshFilepathsDic()
+
+    for mesh_element in origin_meshes_list:
+        time_index = mesh_element[0]
+        mesh = mesh_element[1]
+
+        mesh_file_path = os.path.join(mesh_files_folderpath, f"original_mesh_{time_index}.obj")
+        mesh.export(mesh_file_path)
+        origin_meshes_filepaths[TimeIndex(time_index)] = FilePath(mesh_file_path)
+
+    processed_points_filepaths = visualizer.save_as_obj_file(mesh_files_folderpath)
+
+    metrics = compute_mesh_metrics(original_mesh_filepaths=origin_meshes_filepaths,
+                                   processed_mesh_filepaths=processed_points_filepaths,
+                                   metro_exe_filepath=train_config.file_path_config.metrics_mesh_shape_metro_filepath)
+
+    print("Hello")
+

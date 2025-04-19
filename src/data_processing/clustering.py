@@ -65,12 +65,16 @@ def _hierarchical_clustering_from_precomputed_distances(distances, n_clusters=4,
     return labels
 # endregion
 
-def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps):
+def _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps, session_clustered_data_filepath):
 
     clustered_points = _pipeline_clustered_data_prepare(num_clusters, raw_data_folderpath, time_steps)
 
     # Save the clustered data
     with open(clustered_data_filepath, 'wb') as f:
+        pickle.dump(clustered_points, f)
+
+    # Save the session clustered data
+    with open(session_clustered_data_filepath, 'wb') as f:
         pickle.dump(clustered_points, f)
 
 def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes, time_steps) -> ClusteredCenterPointsAllFrames:
@@ -83,7 +87,7 @@ def _pipeline_clustered_data_prepare(num_clusters, folder_path_meshes, time_step
     return clustered_center_points_allframes
 
 # Function to process and save clustered data if not already processed
-def process_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps):
+def process_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps, session_clustered_data_filepath):
     """
     Saves all points of centers which was labeled by hierarchical clustering
     :param num_clusters:
@@ -93,7 +97,13 @@ def process_clustered_data(num_clusters, raw_data_folderpath, clustered_data_fil
     :return:
     """
     if not os.path.exists(clustered_data_filepath):
-        _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps)
+        _save_clustered_data(num_clusters, raw_data_folderpath, clustered_data_filepath, time_steps, session_clustered_data_filepath)
         logging.info("Clustered data processed and saved.")
     else:
+        # copy file from clustered_data_filepath to session_clustered_data_filepath
+        with open(clustered_data_filepath, 'rb') as f:
+            clustered_points = pickle.load(f)
+        with open(session_clustered_data_filepath, 'wb') as f:
+            pickle.dump(clustered_points, f)
+
         logging.info("Clustered data already processed.")

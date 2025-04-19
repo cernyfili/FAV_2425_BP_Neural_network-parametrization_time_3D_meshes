@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from jsonschema import validate, ValidationError
 
-TEST_MODE = False
+TEST_MODE = True
 
 # Restrict access to only uppercase constants
 def __getattr__(name):
@@ -61,12 +61,14 @@ class CDataPreprocessing:
 
 # region Filepaths constants
 # region filenames
+current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+
 model_weights_templatename = "model_weights_cluster_{cluster}.pth"
 surface_data_list_filename = 'surface_data_list.pkl'
 clustered_data_filename = 'clustered_data.pkl'
 log_file_filename = 'application.log'
-point_cloud_original_filename = "original_points_all.csv"
-point_cloud_processed_filename = "processed_points_all.csv"
+point_cloud_original_filename = f"original_points_all_{current_time_str}.csv"
+point_cloud_processed_filename = f"processed_points_all_{current_time_str}.csv"
 center_metric_eval = "center_metric_eval"
 center_metric_variances = "center_metric_variances"
 mesh_shape_metrics = "mesh_shape_metrics.txt"
@@ -164,7 +166,10 @@ class FilePathConfig:
         self.processed_session_folderpath = None
 
         self.surface_data_filepath = None
+        self.session_surface_data_filepath = None
+
         self.clustered_data_filepath = None
+        self.session_clustered_data_filepath = None
 
         self.log_filepath = None
 
@@ -181,6 +186,8 @@ class FilePathConfig:
         # EVAL METRICS
         self.center_metric_eval_filepath = None
         self.mesh_shape_metrics_filepath = None
+
+        self.metrics_mesh_shape_metro_filepath = os.path.join(os.getcwd(), "..", "bin", "metro.exe")
         
     @classmethod
     def create_test_mode(cls, data_foldername, processed_session_folderpath=None, raw_folderpath=None,
@@ -207,7 +214,10 @@ class FilePathConfig:
         instance.raw_data_folderpath = os.path.join(raw_folderpath, data_foldername)
 
         instance.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)
+        instance.session_surface_data_filepath = os.path.join(processed_session_folderpath, surface_data_list_filename)
+
         instance.clustered_data_filepath = os.path.join(processed_data_folderpath, clustered_data_filename)
+        instance.session_clustered_data_filepath = os.path.join(processed_session_folderpath, clustered_data_filename)
 
         instance.log_filepath = os.path.join(instance.processed_session_folderpath,
                                          log_file_filename)  # Specify your log file path here
@@ -238,7 +248,10 @@ class FilePathConfig:
         instance.raw_data_folderpath = raw_data_folderpath
 
         instance.surface_data_filepath = os.path.join(instance.processed_session_folderpath, surface_data_list_filename)
+        instance.session_surface_data_filepath = instance.surface_data_filepath
+
         instance.clustered_data_filepath = os.path.join(instance.processed_session_folderpath, clustered_data_filename)
+        instance.session_clustered_data_filepath = instance.clustered_data_filepath
 
         instance.log_filepath = os.path.join(instance.processed_session_folderpath, log_file_filename)
 

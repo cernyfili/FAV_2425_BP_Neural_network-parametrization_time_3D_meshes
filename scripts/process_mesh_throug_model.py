@@ -10,7 +10,7 @@ Description:
 import logging
 import os
 
-from nerual_network.evaluation.meshes import MeshDataVisualizer, process_mesh_through_model
+from nerual_network.evaluation.meshes import MeshDataVisualizer, process_mesh_through_model_pipeline
 from nerual_network.helpers import load_trained_nn_from_files, MeshData
 from utils.constants import FilePathConfig, DEFAULT_TRAIN_CONFIG
 
@@ -55,7 +55,7 @@ def main():
 
     loaded_models = load_trained_nn_from_files(train_config)
 
-    processed_data = process_mesh_through_model(MeshData(time_index=MESH_TIME_INDEX), train_config, loaded_models)
+    processed_data = process_mesh_through_model_pipeline(MeshData(time_index=MESH_TIME_INDEX), train_config, loaded_models)
 
     visualizer = MeshDataVisualizer(processed_data)
     visualizer.save_as_obj_file(output_folderpath)

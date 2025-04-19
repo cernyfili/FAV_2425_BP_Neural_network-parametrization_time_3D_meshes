@@ -8,7 +8,9 @@ Version: 1.0
 Description: 
 """
 import logging
+import os
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TypeAlias, Dict
 
 import numpy as np
@@ -29,6 +31,12 @@ ProcessedPointsListSplitByTimeValue: TypeAlias = dict[int, np.ndarray]
 class ClusterIndex(int):
     pass
 
+class TimeIndex(int):
+    pass
+
+class FilePath(str):
+    pass
+
 
 @dataclass
 class VisualizationData:
@@ -40,6 +48,9 @@ class VisualizationData:
         if len(self.points) != len(self.colors):
             raise ValueError("points and rgb_colors must have the same length")
 
+
+class MeshFilepathsDic(Dict[TimeIndex, FilePath]):
+    pass
 
 class LoadedModelDic(Dict[ClusterIndex, nn.Module]):
     pass
@@ -332,7 +343,7 @@ def _load_trained_model(model_weights_filepath: str, train_config: TrainConfig):
 def load_trained_nn_from_files(train_config: TrainConfig) -> LoadedModelDic:
     logging.info(
         f"START: loading nn from model weights files {train_config.file_path_config.model_weights_folderpath_template}")
-    loaded_models = LoadedModelDic()
+    loaded_models = MeshFilepathsDic()
     num_clusters = train_config.num_clusters
     model_type = train_config.nn_config.model_type
     model_weights_template = train_config.file_path_config.model_weights_folderpath_template
@@ -377,3 +388,28 @@ def load_trained_nn_from_file(model_weights_filepath: str, model_type: ModelType
     model.to(device)
 
     return model
+
+
+def create_timestemp_dir(output_folderpath: Folderpath) -> Folderpath:
+    # create output folder if not exists
+    # add current time to folder name
+    current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_folderpath = os.path.join(output_folderpath, f"{current_time_str}")
+    os.makedirs(output_folderpath, exist_ok=True)
+    return output_folderpath
+
+
+@dataclass
+class CenterMetricsElement:
+    mean_per_point_difference: torch.Tensor
+    max_per_point_difference: torch.Tensor
+    min_per_point_difference: torch.Tensor
+    time_index: int
+    cluster_index: int | None
+
+
+@dataclass
+class MetroMetrics:
+    max: float
+    mean: float
+    rms: float

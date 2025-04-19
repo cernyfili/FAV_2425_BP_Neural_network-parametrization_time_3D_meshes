@@ -242,7 +242,7 @@ def train_nn(train_config: TrainConfig):
     logging.info(f"Optimizer: {optimizer}")
     logging.info(f"Loss function: {loss_function}")
 
-    surface_data_list = load_pickle_file(train_config.file_path_config.surface_data_filepath)
+    surface_data_list = load_pickle_file(train_config.file_path_config.session_surface_data_filepath)
     if surface_data_list is None or surface_data_list.public_list is None or not isinstance(surface_data_list,
                                                                                      SurfacePointsFrameList):
         logging.error("Surface data list could not be loaded. Exiting.")

@@ -14,10 +14,11 @@ from utils.helpers import init_logger, end_logger
 
 def preprocess_data(train_config):
     process_clustered_data(train_config.num_clusters, train_config.file_path_config.raw_data_folderpath,
-                           train_config.file_path_config.clustered_data_filepath, train_config.max_time_steps)
+                           train_config.file_path_config.clustered_data_filepath, train_config.max_time_steps, train_config.file_path_config.session_clustered_data_filepath)
+
     process_surface_data(train_config.num_surface_points, train_config.file_path_config.raw_data_folderpath,
                          train_config.file_path_config.surface_data_filepath,
-                         train_config.file_path_config.clustered_data_filepath)
+                         train_config.file_path_config.session_clustered_data_filepath, train_config.file_path_config.session_surface_data_filepath)
 
 
 def main():

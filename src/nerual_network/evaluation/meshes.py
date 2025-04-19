@@ -10,8 +10,6 @@ Description:
 import copy
 import logging
 import os
-from datetime import datetime
-from PIL import Image
 from typing import TypeAlias
 import open3d as o3d
 import numpy as np
@@ -24,13 +22,14 @@ from data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame, TimeFrame
 from data_processing.mapping import categorize_points_with_labels
 
-from nerual_network.helpers import ProcessedMeshData, Folderpath, MeshData, LoadedModelDic, \
+from nerual_network.helpers import ProcessedMeshData, MeshData, MeshFilepathsDic, \
     _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization, \
-    ProcessedPointsListSplitByTimeValue, NNOutputForVisualization
+    ProcessedPointsListSplitByTimeValue, NNOutputForVisualization, create_timestemp_dir, FilePath, TimeIndex, \
+    LoadedModelDic
 from utils.constants import TrainConfig
 from utils.helpers import load_pickle_file
 
-TimeIndex : TypeAlias = int
+
 TriMeshDict : TypeAlias = dict[TimeIndex, Trimesh]
 
 
@@ -38,21 +37,13 @@ class MeshDataVisualizer:
     def __init__(self, processed_data: ProcessedMeshData):
         self.processed_mesh_data : ProcessedMeshData = processed_data
 
-    @staticmethod
-    def create_dir(output_folderpath: Folderpath) -> Folderpath:
-        # create output folder if not exists
-        # add current time to folder name
-        current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_folderpath = os.path.join(output_folderpath, f"mesh_{current_time_str}")
-        os.makedirs(output_folderpath, exist_ok=True)
-        return output_folderpath
 
     def save_as_pointcloud_to_file(self, save_folderpath : str):
         rgb_colors = self.processed_mesh_data.processed_visualization_data.rgb_colors
         processed_points_split_by_time_value = self.processed_mesh_data.processed_visualization_data.processed_points
 
         # make dir if not made
-        save_folderpath = self.create_dir(save_folderpath)
+        save_folderpath = create_timestemp_dir(save_folderpath)
 
         # Save the RGB values to another file
         rgb_colors_filepath = os.path.join(save_folderpath, 'rgb_colors.txt')
@@ -87,23 +78,24 @@ class MeshDataVisualizer:
         return trimesh_dict
 
 
-    def save_as_obj_file(self, save_folderpath: str):
+    def save_as_obj_file(self, save_folderpath: str) -> MeshFilepathsDic:
         trimesh_dict = self._get_trimesh_dict()
 
-        # make dir if not made
-        save_folderpath = self.create_dir(save_folderpath)
-
+        filepaths_dict = MeshFilepathsDic()
         for time_index, mesh in trimesh_dict.items():
-            processed_points_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.obj')
+            processed_points_filepath = os.path.join(save_folderpath, f'processed_mesh_{time_index}.obj')
 
+            filepaths_dict[TimeIndex(time_index)] = FilePath(processed_points_filepath)
             mesh.export(processed_points_filepath)
             logging.info(f"Saved processed points to {processed_points_filepath}")
+
+        return filepaths_dict
 
     def save_as_ply_file(self, save_folderpath: str):
         trimesh_dict = self._get_trimesh_dict()
 
         # make dir if not made
-        save_folderpath = self.create_dir(save_folderpath)
+        save_folderpath = create_timestemp_dir(save_folderpath)
 
         for time_index, mesh in trimesh_dict.items():
             processed_points_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.ply')
@@ -115,7 +107,7 @@ class MeshDataVisualizer:
         trimesh_dict = self._get_trimesh_dict()
 
         # make dir if not made
-        save_folderpath = self.create_dir(save_folderpath)
+        save_folderpath = create_timestemp_dir(save_folderpath)
 
         rgb_colors = self.processed_mesh_data.processed_visualization_data.rgb_colors
 
@@ -179,7 +171,7 @@ class MeshDataVisualizer:
         trimesh_dict = self._get_trimesh_dict()
 
         # make dir if not made
-        save_folderpath = self.create_dir(save_folderpath)
+        save_folderpath = create_timestemp_dir(save_folderpath)
 
         for time_index, mesh in trimesh_dict.items():
             processed_points_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.ply')
@@ -256,31 +248,39 @@ def _create_mesh_surfacedatalist(clustered_data : ClusteredCenterPointsAllFrames
     return mesh_surface_points_frame_list
 
 
-def process_mesh_through_model(origin_mesh_data: MeshData, train_config: TrainConfig,
-                               loaded_models : LoadedModelDic) -> ProcessedMeshData | None:
+def process_mesh_through_model_pipeline(origin_mesh_data: MeshData, train_config: TrainConfig,
+                                        loaded_models : LoadedModelDic) -> ProcessedMeshData | None:
+    # region STEP Read clustered data, surface data
+    clustered_data: ClusteredCenterPointsAllFrames = load_pickle_file(
+        train_config.file_path_config.session_clustered_data_filepath)
+    if clustered_data is None:
+        logging.error("Clustered data could not be loaded. Exiting.")
+        return None
+
+    surface_data_list: SurfacePointsFrameList = load_pickle_file(train_config.file_path_config.session_surface_data_filepath)
+    if surface_data_list is None or surface_data_list.public_list is None:
+        logging.error("Surface data list could not be loaded. Exiting.")
+        return None
+    # endregion
+
+    return process_mesh_through_model(origin_mesh_data=origin_mesh_data, loaded_models=loaded_models, clustered_data=clustered_data,
+                                      surface_data_list=surface_data_list)
+
+
+def process_mesh_through_model(origin_mesh_data: MeshData, loaded_models : LoadedModelDic, clustered_data : ClusteredCenterPointsAllFrames, surface_data_list: SurfacePointsFrameList) -> ProcessedMeshData | None:
     """
     Function to process mesh through model
+    :param surface_data_list:
+    :param clustered_data:
     :param loaded_models:
     :param origin_mesh_data:
-    :param train_config:
     :return:
     """
 
 
 
     # region PREPARE MESH FOR MODEL
-    # region STEP Read clustered data, surface data
-    clustered_data: ClusteredCenterPointsAllFrames = load_pickle_file(
-        train_config.file_path_config.clustered_data_filepath)
-    if clustered_data is None:
-        logging.error("Clustered data could not be loaded. Exiting.")
-        return None
 
-    surface_data_list: SurfacePointsFrameList = load_pickle_file(train_config.file_path_config.surface_data_filepath)
-    if surface_data_list is None or surface_data_list.public_list is None:
-        logging.error("Surface data list could not be loaded. Exiting.")
-        return None
-    # endregion
 
     # region STEP Create Surface data from this
 

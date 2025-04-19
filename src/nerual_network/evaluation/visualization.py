@@ -9,6 +9,7 @@ Description:
 """
 import logging
 import os
+from datetime import time, datetime
 
 import numpy as np
 import torch
@@ -16,8 +17,9 @@ from matplotlib import pyplot as plt
 
 from data_processing.class_mapping import SurfacePointsFrameList
 from nerual_network.class_model import NNDataset
-from nerual_network.helpers import LoadedModelDic, NNOutputForVisualization, \
-    _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization, VisualizationData
+from nerual_network.helpers import MeshFilepathsDic, NNOutputForVisualization, \
+    _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization, VisualizationData, \
+    create_timestemp_dir, LoadedModelDic
 from nerual_network.loss_functions import run_through_nn_at_same_time
 from utils.constants import NN_DEVICE_STR
 
@@ -36,6 +38,7 @@ def _create_pointclouds_from_time_to_all_times(surface_data_list: SurfacePointsF
 
         # make dir if not made
         os.makedirs(images_save_folderpath, exist_ok=True)
+        images_save_folderpath = create_timestemp_dir(images_save_folderpath)
 
         # Save the RGB values to another file
         rgb_colors_filepath = os.path.join(images_save_folderpath, 'rgb_colors.txt')
@@ -65,6 +68,8 @@ def _visualize_all_clusters_for_each_time(surface_data_list: SurfacePointsFrameL
     # Ensure the image save folder exists
     os.makedirs(image_save_folder, exist_ok=True)
 
+    image_save_folder = create_timestemp_dir(image_save_folder)
+
     # Loop through each unique time value
     for i, surface_data_frame in enumerate(surface_data_list.public_list):
         if surface_data_frame.time.index != i:
@@ -91,6 +96,8 @@ def _visualize_combined_surface_points_for_each_time(original_points_all, proces
     logging.info("START: Visulazing for each time")
     # Ensure the image save folder exists
     os.makedirs(image_save_folder, exist_ok=True)
+
+    image_save_folder = create_timestemp_dir(image_save_folder)
 
     # Extract unique time values assuming the last column contains time values
     unique_times = np.unique(original_points_all[:, 3])
@@ -159,8 +166,10 @@ def _visualize_points_with_time(original_points_all, processed_points_all, image
 
     ax.legend()
 
+    current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+
     # Save the plot
-    image_path = os.path.join(image_save_folderpath, 'combined_surface_points_time_colored.png')
+    image_path = os.path.join(image_save_folderpath, f'combined_surface_points_time_colored_{current_time_str}.png')
     plt.savefig(image_path)
     plt.close(fig)
 
@@ -177,6 +186,7 @@ def _visualize_original_and_processed_points(original_points_all, processed_poin
     """
     # Ensure the save folder exists
     os.makedirs(image_save_folder, exist_ok=True)
+    current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # Extracting x, y, z coordinates and time from original points
     original_x = original_points_all[:, 0]
@@ -204,7 +214,7 @@ def _visualize_original_and_processed_points(original_points_all, processed_poin
     cbar_original.set_label('Time (Original Points)')
 
     # Save the original points plot
-    original_image_path = os.path.join(image_save_folder, 'original_surface_points_time_colored.png')
+    original_image_path = os.path.join(image_save_folder, f'original_surface_points_time_colored_{current_time_str}.png')
     plt.savefig(original_image_path)
     plt.close(fig_original)
 
@@ -237,7 +247,7 @@ def _visualize_original_and_processed_points(original_points_all, processed_poin
     cbar_processed.set_label('Time (Processed Points)')
 
     # Save the processed points plot
-    processed_image_path = os.path.join(image_save_folder, 'processed_surface_points_time_colored.png')
+    processed_image_path = os.path.join(image_save_folder, f'processed_surface_points_time_colored_{current_time_str}.png')
     plt.savefig(processed_image_path)
     plt.close(fig_processed)
 
@@ -369,6 +379,8 @@ def visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images_
         # create folder if not created
         os.makedirs(images_save_folderpath, exist_ok=True)
 
+        images_save_folderpath = create_timestemp_dir(images_save_folderpath)
+
         # Loop through each unique time value
         for time_index, processed_points_slice in processed_points_split_by_time_value.items():
             if time_index % modulo != 0:
@@ -379,7 +391,6 @@ def visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images_
             axis_label = f'3D Visualization of Original and Processed Points from Time {time_index}'
 
             save_points_with_colors(VisualizationData(processed_points_slice, rgb_colors), filepath, axis_label)
-
 
 
     visualization_data = _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
