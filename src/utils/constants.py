@@ -187,7 +187,7 @@ class FilePathConfig:
         self.center_metric_eval_filepath = None
         self.mesh_shape_metrics_filepath = None
 
-        self.metrics_mesh_shape_metro_filepath = os.path.join(os.getcwd(), "..", "bin", "metro.exe")
+        self.metrics_mesh_shape_metro_filepath = os.path.join(os.getcwd(), "bin", "metro.exe")
         
     @classmethod
     def create_test_mode(cls, data_foldername, processed_session_folderpath=None, raw_folderpath=None,

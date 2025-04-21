@@ -7,23 +7,27 @@ Created: 17.04.2025
 Version: 1.0
 Description: 
 """
+import csv
 import json
 import logging
 import os
 import pickle
+import re
 import subprocess
 from itertools import groupby
-from typing import re
 
 import numpy as np
 import torch
 
+from data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame
 from nerual_network.class_model import NNDataset
+from nerual_network.evaluation.meshes import process_mesh_through_model, MeshDataVisualizer
 from nerual_network.helpers import MeshFilepathsDic, ClusterIndex, CentersMetricsInfo, \
-    FilePath, CenterMetricsElement, MetroMetrics, TimeIndex
+    FilePath, CenterMetricsElement, MetroMetrics, TimeIndex, LoadedModelDic, MeshData
 from nerual_network.loss_functions import run_through_nn_at_decoder_time
-from utils.constants import NN_DEVICE_STR
+from utils.constants import NN_DEVICE_STR, TrainConfig
+from utils.helpers import load_pickle_file
 
 
 #
@@ -65,7 +69,7 @@ def _get_closes_centers_indices_by_points_and_time_index(closest_centers_matrix:
     return closest_centers_indices_tensor
 
 
-def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: MeshFilepathsDic, num_points: int) -> dict[int, list[
+def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: LoadedModelDic, num_points: int) -> dict[int, list[
     CenterMetricsElement]]:
     """
     returns list of tensors with distance differences (original point - closest_center) - FOR_ALL_TIME(processed_point - closest_center)
@@ -177,6 +181,27 @@ def compute_save_centers_metrics(centers_metrics_info: CentersMetricsInfo, folde
         pickle.dump(centers_metrics_data_list, f)
 
     logging.info(f"Centers metrics data list saved to {filepath}")
+
+    # save as json file all values
+    def convert_to_dict(element):
+        return {
+            'mean_per_point_difference': element.mean_per_point_difference.tolist(),
+            'max_per_point_difference': element.max_per_point_difference.tolist(),
+            'min_per_point_difference': element.min_per_point_difference.tolist(),
+            'time_index': element.time_index,
+            'cluster_index': element.cluster_index
+        }
+
+    elements_list = []
+    for time_index, centers_metrics_element in centers_metrics_data_list.items():
+        for element in centers_metrics_element:
+            elements_list.append(convert_to_dict(element))
+
+    # save to json file
+    file_name = f"centers_metrics_all_values_{centers_metrics_info.num_points}.json"
+    file_path = os.path.join(folderpath, file_name)
+    with open(file_path, 'w') as f:
+        json.dump(elements_list, f)
 
 
     # cat all tensors in one tensor big tensor with all points num_points * num_time_steps
@@ -346,7 +371,7 @@ def compute_save_centers_metrics(centers_metrics_info: CentersMetricsInfo, folde
 #         loaded_meshes_list.append(mesh)
 #     return loaded_meshes_list
 
-def run_metro(mesh1_path, mesh2_path, metro_path="metro.exe"):
+def _run_metro(mesh1_path, mesh2_path, metro_path="metro.exe"):
     logging.info(f"Running metro.exe with {mesh1_path} and {mesh2_path}")
     # Construct the command to run metro.exe
     cmd = [metro_path, mesh1_path, mesh2_path]
@@ -360,8 +385,7 @@ def run_metro(mesh1_path, mesh2_path, metro_path="metro.exe"):
 
     return result.stdout
 
-
-def parse_metro_output(output_text) -> MetroMetrics:
+def _parse_metro_output(output_text) -> MetroMetrics:
     # Define regex patterns to extract max, mean, and RMS
     forward_distance_pattern = r"Forward distance \(M1 -> M2\):.*?distances:\s*max\s*:\s*([\d\.]+).*?mean\s*:\s*([\d\.]+).*?RMS\s*:\s*([\d\.]+)"
     backward_distance_pattern = r"Backward distance \(M2 -> M1\):.*?distances:\s*max\s*:\s*([\d\.]+).*?mean\s*:\s*([\d\.]+).*?RMS\s*:\s*([\d\.]+)"
@@ -390,7 +414,7 @@ def parse_metro_output(output_text) -> MetroMetrics:
         rms=forward_rms,
     )
 
-def compute_one_mesh_metric(origin_mesh_filepath : FilePath, processed_mesh_filepath : FilePath, metro_exe_filepath : str) -> MetroMetrics:
+def _compute_one_mesh_metric(origin_mesh_filepath : FilePath, processed_mesh_filepath : FilePath, metro_exe_filepath : str) -> MetroMetrics:
     """
     Computes metrics which:
     1. loads mesh in one specified time
@@ -404,10 +428,10 @@ def compute_one_mesh_metric(origin_mesh_filepath : FilePath, processed_mesh_file
     :return:
     """
     # Run metro.exe and capture the output
-    output_text = run_metro(origin_mesh_filepath, processed_mesh_filepath, metro_exe_filepath)
+    output_text = _run_metro(origin_mesh_filepath, processed_mesh_filepath, metro_exe_filepath)
 
     # Parse the output text to extract max, mean, and RMS values
-    metrics = parse_metro_output(output_text)
+    metrics = _parse_metro_output(output_text)
 
     return metrics
 
@@ -438,10 +462,84 @@ def compute_mesh_metrics(original_mesh_filepaths : MeshFilepathsDic, processed_m
     metrics_dict = dict()
     for time_index, original_mesh_filepath in original_mesh_filepaths.items():
         processed_mesh_filepath = processed_mesh_filepaths[time_index]
-        metrics = compute_one_mesh_metric(original_mesh_filepath, processed_mesh_filepath, metro_exe_filepath)
+        metrics = _compute_one_mesh_metric(original_mesh_filepath, processed_mesh_filepath, metro_exe_filepath)
         metrics_dict[time_index] = metrics
 
     logging.info(f"END: computing mesh metrics")
 
     return metrics_dict
+
+def compute_save_mesh_shape_metrics(folderpath : str, surface_data_list : SurfacePointsFrameList, train_config : TrainConfig, loaded_models : LoadedModelDic, mesh_time_index : int):
+    # region STEP Read clustered data, surface data
+    clustered_data: ClusteredCenterPointsAllFrames = load_pickle_file(
+        train_config.file_path_config.session_clustered_data_filepath)
+    if clustered_data is None:
+        logging.error("Clustered data could not be loaded. Exiting.")
+        return None
+
+    processed_data = process_mesh_through_model(origin_mesh_data=MeshData(time_index=mesh_time_index),
+                                                loaded_models=loaded_models,
+                                                clustered_data=clustered_data,
+                                                surface_data_list=surface_data_list
+                                                )
+    visualizer = MeshDataVisualizer(processed_data)
+
+    os.makedirs(folderpath, exist_ok=True)
+
+    mesh_files_folderpath = os.path.join(folderpath, "meshes")
+    os.makedirs(mesh_files_folderpath, exist_ok=True)
+
+    # Save origin mesh
+    origin_meshes_list = surface_data_list.get_original_meshes_list()
+    origin_meshes_filepaths = MeshFilepathsDic()
+
+    for mesh_element in origin_meshes_list:
+        time_index = mesh_element[0]
+        mesh = mesh_element[1]
+
+        mesh_file_path = os.path.join(mesh_files_folderpath, f"original_mesh_{time_index}.obj")
+        mesh.export(mesh_file_path)
+        origin_meshes_filepaths[TimeIndex(time_index)] = FilePath(mesh_file_path)
+
+    processed_points_filepaths = visualizer.save_as_obj_file(mesh_files_folderpath)
+
+    metrics_dict = compute_mesh_metrics(original_mesh_filepaths=origin_meshes_filepaths,
+                                        processed_mesh_filepaths=processed_points_filepaths,
+                                        metro_exe_filepath=train_config.file_path_config.metrics_mesh_shape_metro_filepath)
+
+    # save as pickle
+    metrics_filepath = os.path.join(folderpath, "mesh_shape_metrics.pkl")
+    with open(metrics_filepath, "wb") as file:
+        pickle.dump(metrics_dict, file)
+
+    # save as csv
+    metrics_csv_filepath = os.path.join(folderpath, "mesh_shape_metrics.csv")
+    csv_data = []
+    csv_data.append(["time_index", "max", "mean", "rms"])
+    for time_index, element in metrics_dict.items():
+        csv_data.append([time_index, element.max, element.mean, element.rms])
+    with open(metrics_csv_filepath, "w") as file:
+        writer = csv.writer(file)
+        writer.writerows(csv_data)
+
+
+
+    # compute max and mean and save to json
+    max_list = []
+    mean_list = []
+    for time_index, element in metrics_dict.items():
+        max_list.append(element.max)
+        mean_list.append(element.mean)
+
+    max_value = max(max_list)
+    mean_value = sum(mean_list) / len(mean_list)
+
+    metrics_json_filepath = os.path.join(folderpath, "mesh_shape_metrics.json")
+    dict_metrics = {
+        "max": max_value,
+        "mean": mean_value
+    }
+    with open(metrics_json_filepath, "w") as file:
+        json.dump(dict_metrics, file)
+
 # endregion
