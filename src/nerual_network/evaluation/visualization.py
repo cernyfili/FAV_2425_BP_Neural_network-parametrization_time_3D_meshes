@@ -372,7 +372,7 @@ def save_points_with_colors(visualization_data: VisualizationData, filepath: str
 
 def visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images_save_folderpath: str, time_index: int,
                               loaded_models : LoadedModelDic, modulo : int):
-    def visualize_for_eachtime(visualization_data : NNOutputForVisualization):
+    def visualize_for_eachtime(visualization_data : NNOutputForVisualization, images_save_folderpath):
         rgb_colors = visualization_data.rgb_colors
         processed_points_split_by_time_value = visualization_data.processed_points
 
@@ -396,7 +396,7 @@ def visualize_uv_points_in_3d(surface_data_list: SurfacePointsFrameList, images_
     visualization_data = _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
         surface_data_list=surface_data_list, time_index=time_index, loaded_models=loaded_models)
 
-    visualize_for_eachtime(visualization_data)
+    visualize_for_eachtime(visualization_data, images_save_folderpath)
 
 
 def _visualize_combined_surface_points_for_one_time(image_save_folder, original_points_slice, processed_points_slice,

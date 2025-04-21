@@ -11,7 +11,6 @@ import copy
 import logging
 import os
 from typing import TypeAlias
-import open3d as o3d
 import numpy as np
 import trimesh
 from matplotlib import pyplot as plt
@@ -167,47 +166,47 @@ class MeshDataVisualizer:
             plt.close()
             logging.info(f"Saved processed points to {processed_points_filepath}")
 
-    def save_img_of_meshes_with_ply(self, save_folderpath: str):
-        trimesh_dict = self._get_trimesh_dict()
-
-        # make dir if not made
-        save_folderpath = create_timestemp_dir(save_folderpath)
-
-        for time_index, mesh in trimesh_dict.items():
-            processed_points_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.ply')
-            img_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.png')
-
-            mesh.export(processed_points_filepath)
-            logging.info(f"Saved processed points to {processed_points_filepath}")
-
-            mesh = o3d.io.read_triangle_mesh(processed_points_filepath)
-            if not mesh.has_vertex_normals():
-                mesh.compute_vertex_normals()
-
-            # Set up the offscreen renderer
-            width, height = 1024, 768
-            renderer = o3d.visualization.rendering.OffscreenRenderer(width, height)
-
-            # Set background color (white RGBA)
-            renderer.scene.set_background([1.0, 1.0, 1.0, 1.0])
-
-            # Set up material
-            material = o3d.visualization.rendering.MaterialRecord()
-            material.shader = "defaultLit"
-
-            # Add mesh to scene
-            renderer.scene.add_geometry("mesh", mesh, material)
-
-            # Center the camera on the mesh
-            bbox = mesh.get_axis_aligned_bounding_box()
-            renderer.setup_camera(60.0, bbox, bbox.get_center())
-
-            # Render to image
-            image = renderer.render_to_image()
-
-            # Save the image
-            o3d.io.write_image(img_filepath, image)
-            print("Saved image to rendered_mesh.png")
+    # def save_img_of_meshes_with_ply(self, save_folderpath: str):
+    #     trimesh_dict = self._get_trimesh_dict()
+    #
+    #     # make dir if not made
+    #     save_folderpath = create_timestemp_dir(save_folderpath)
+    #
+    #     for time_index, mesh in trimesh_dict.items():
+    #         processed_points_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.ply')
+    #         img_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.png')
+    #
+    #         mesh.export(processed_points_filepath)
+    #         logging.info(f"Saved processed points to {processed_points_filepath}")
+    #
+    #         mesh = o3d.io.read_triangle_mesh(processed_points_filepath)
+    #         if not mesh.has_vertex_normals():
+    #             mesh.compute_vertex_normals()
+    #
+    #         # Set up the offscreen renderer
+    #         width, height = 1024, 768
+    #         renderer = o3d.visualization.rendering.OffscreenRenderer(width, height)
+    #
+    #         # Set background color (white RGBA)
+    #         renderer.scene.set_background([1.0, 1.0, 1.0, 1.0])
+    #
+    #         # Set up material
+    #         material = o3d.visualization.rendering.MaterialRecord()
+    #         material.shader = "defaultLit"
+    #
+    #         # Add mesh to scene
+    #         renderer.scene.add_geometry("mesh", mesh, material)
+    #
+    #         # Center the camera on the mesh
+    #         bbox = mesh.get_axis_aligned_bounding_box()
+    #         renderer.setup_camera(60.0, bbox, bbox.get_center())
+    #
+    #         # Render to image
+    #         image = renderer.render_to_image()
+    #
+    #         # Save the image
+    #         o3d.io.write_image(img_filepath, image)
+    #         print("Saved image to rendered_mesh.png")
 
 
 def _create_mesh_surfacedatalist(clustered_data : ClusteredCenterPointsAllFrames, surface_data_list : SurfacePointsFrameList) -> SurfacePointsFrameList:
@@ -294,12 +293,10 @@ def process_mesh_through_model(origin_mesh_data: MeshData, loaded_models : Loade
     # region PROCESS MESH THROUGH MODEL
 
     # deep copy of mesh_surface_points_frame_list
-    normalized_mesh_surface_points_frame_list: SurfacePointsFrameList = copy.deepcopy(mesh_surface_points_frame_list)
-    normalized_mesh_surface_points_frame_list.normalize_labeled_points_by_values(surface_data_list.normalize_values)
-    input_model_data: SurfacePointsFrameList = normalized_mesh_surface_points_frame_list
+    mesh_surface_points_frame_list.normalize_labeled_points_by_values(surface_data_list.normalize_values)
 
     visualization_data = _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
-        surface_data_list=input_model_data, time_index=origin_mesh_data.time_index, loaded_models=loaded_models)
+        surface_data_list=mesh_surface_points_frame_list, time_index=origin_mesh_data.time_index, loaded_models=loaded_models)
     processed_points_split_by_time_value = visualization_data.processed_points
 
 
@@ -313,6 +310,6 @@ def process_mesh_through_model(origin_mesh_data: MeshData, loaded_models : Loade
         denormalized_points = SurfacePointsFrameList.denormalize_points(surface_data_list.normalize_values, processed_points_one_time_value)
         denormalized_points_split_by_time_value[time_index] = denormalized_points
 
-    origin_mesh = input_model_data.get_element_by_time_index(origin_mesh_data.time_index).original_mesh
+    origin_mesh = mesh_surface_points_frame_list.get_element_by_time_index(origin_mesh_data.time_index).original_mesh
     return ProcessedMeshData(
         NNOutputForVisualization(rgb_colors=visualization_data.rgb_colors, processed_points=denormalized_points_split_by_time_value), origin_mesh)
