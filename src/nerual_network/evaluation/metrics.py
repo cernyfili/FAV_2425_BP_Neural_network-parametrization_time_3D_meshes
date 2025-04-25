@@ -25,7 +25,7 @@ from nerual_network.class_model import NNDataset
 from nerual_network.evaluation.meshes import process_mesh_through_model, MeshDataVisualizer
 from nerual_network.helpers import MeshFilepathsDic, ClusterIndex, CentersMetricsInfo, \
     FilePath, CenterMetricsElement, MetroMetrics, TimeIndex, LoadedModelDic, MeshData
-from nerual_network.loss_functions import run_through_nn_at_decoder_time
+from nerual_network.loss_functions import run_through_nn_at_decoder_time, run_through_nn_at_decoder_time_evaluation
 from utils.constants import NN_DEVICE_STR, TrainConfig
 from utils.helpers import load_pickle_file
 
@@ -124,8 +124,7 @@ def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: Loaded
             all_distance_differences = []  # To store differences between input and decoded distances
             for decoder_time in time_list:
                 # DECODED POINTS
-                with torch.no_grad():
-                    processed_points = run_through_nn_at_decoder_time(inputs=filtered_input_tensor, model=model, decoder_time=decoder_time)
+                processed_points = run_through_nn_at_decoder_time_evaluation(inputs_all=filtered_input_tensor, model=model, decoder_time=decoder_time)
 
                 # CENTERS POINTS at decoded_time
                 centers_point_decoded_time = _get_centers_points_by_time_and_closestcentersindicies(data,

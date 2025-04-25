@@ -20,13 +20,6 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
-
-# region PRIVATE FUNCTIONS
-
-
-# endregion
-
-
 # def _compute_centers_metrics(surface_data_list, train_config, num_points, nn_lr):
 #     """
 #     Computes metrics which:
@@ -219,7 +212,7 @@ def evaluate_partial(train_config: TrainConfig):
 
     save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config, 0)
 
-    #save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list)
+    save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list)
 
 def evaluate_partial_2(train_config: TrainConfig):
     surface_data_list = load_pickle_file(train_config.file_path_config.session_surface_data_filepath)

@@ -38,6 +38,25 @@ class NNDataset(Dataset):
 
         self.data = np.vstack(self.data)  # Shape: [total_points, feature_count]
 
+    # class method which gets tensor as input
+    @classmethod
+    def from_tensor(cls, tensor: torch.Tensor):
+        """
+        Create an instance of NNDataset from a tensor.
+        :param tensor: Input tensor.
+        :return: NNDataset instance.
+        """
+        if tensor is None:
+            raise ValueError("tensor must not be None")
+        if not isinstance(tensor, torch.Tensor):
+            raise TypeError("tensor must be a torch.Tensor")
+
+        dataset = cls.__new__(cls)
+        # convert tensor to numpy array
+        tensor_np = tensor.detach().cpu().numpy()
+        dataset.data = tensor_np
+        return dataset
+
     def __len__(self):
         return len(self.data)
 

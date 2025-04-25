@@ -20,7 +20,8 @@ from trimesh import Trimesh
 
 from data_processing.class_mapping import SurfacePointsFrameList
 from nerual_network.class_model import NNDataset
-from nerual_network.loss_functions import run_through_encoder, run_through_decoder_at_time
+from nerual_network.loss_functions import run_through_encoder, run_through_decoder_at_time, \
+    run_through_encoder_evaluation, run_through_decoder_at_time_evaluation
 from utils.constants import TrainConfig, NN_DEVICE_STR, ModelType
 from utils.nn_config_utils import init_training_config, init_model
 
@@ -244,7 +245,7 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
 
         original_points_all.append(input_tensor)  # You can store the numpy array directly
 
-        encoded_features = run_through_encoder(inputs=input_tensor, encoder=model.encoder)
+        encoded_features = run_through_encoder_evaluation(inputs_all=input_tensor, encoder=model.encoder)
         # encoded_features = []
         #
         # # Step 1: Encode the original data
@@ -261,7 +262,7 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
         processed_points_one_cluster = []
         # Step 2: Decode in all times
         for time in time_list:
-            decoded_output_tensor = run_through_decoder_at_time(encoded_output=encoded_features,
+            decoded_output_tensor = run_through_decoder_at_time_evaluation(encoded_output_all=encoded_features,
                                                                 decoder=model.decoder,
                                                                 time=time)
             # .cpu().detach().numpy())

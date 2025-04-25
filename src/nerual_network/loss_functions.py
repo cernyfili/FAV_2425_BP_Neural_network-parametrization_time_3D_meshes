@@ -13,6 +13,7 @@ import igl
 import numpy as np
 import torch
 from torch import nn, tensor
+from torch.utils.data import DataLoader
 
 from data_processing.class_mapping import TimeFrame, MeshList, CentersInfo, SurfacePointsFrame, SurfacePointsFrameList, \
     LossFunctionInfo
@@ -105,18 +106,62 @@ def run_through_encoder(inputs, encoder):
 
     return encoded
 
+def run_through_encoder_evaluation(inputs_all, encoder) -> torch.tensor:
+    inputs_dataset = NNDataset.from_tensor(inputs_all)
+
+    dataloader = DataLoader(inputs_dataset, batch_size=32, shuffle=False)
+
+    all_outputs = []
+    with torch.no_grad():
+        for inputs, _ in dataloader:
+            output = run_through_encoder(inputs, encoder)
+            all_outputs.append(output.cpu())
+
+    # Concatenate outputs if needed
+    all_outputs_tensor = torch.cat(all_outputs, dim=0)
+    return all_outputs_tensor
+
+
 
 def run_through_decoder_at_time(encoded_output: torch.tensor, decoder: callable, time: TimeFrame) -> torch.tensor:
     decoder_input_data = tensor_add_time_column(encoded_output, time)
     decoder_output = decoder(decoder_input_data)
     return decoder_output
 
+def run_through_decoder_at_time_evaluation(encoded_output_all: torch.tensor, decoder: callable, time: TimeFrame) -> torch.tensor:
+    inputs_dataset = NNDataset.from_tensor(encoded_output_all)
+
+    dataloader = DataLoader(inputs_dataset, batch_size=32, shuffle=False)
+
+    all_outputs = []
+    with torch.no_grad():
+        for inputs, _ in dataloader:
+            output = run_through_decoder_at_time(inputs, decoder, time)
+            all_outputs.append(output.cpu())
+
+    # Concatenate outputs if needed
+    all_outputs_tensor = torch.cat(all_outputs, dim=0)
+    return all_outputs_tensor
 
 def run_through_nn_at_decoder_time(inputs: torch.tensor, model: callable, decoder_time: TimeFrame) -> torch.tensor:
     encoder_output_data = run_through_encoder(inputs, model.encoder)
     decoder_output_data = run_through_decoder_at_time(encoder_output_data, model.decoder, decoder_time)
     return decoder_output_data
 
+def run_through_nn_at_decoder_time_evaluation(inputs_all: torch.tensor, model: callable, decoder_time: TimeFrame) -> torch.tensor:
+    inputs_dataset = NNDataset.from_tensor(inputs_all)
+
+    dataloader = DataLoader(inputs_dataset, batch_size=32, shuffle=False)
+
+    all_outputs = []
+    with torch.no_grad():
+        for inputs, _ in dataloader:
+            output = run_through_nn_at_decoder_time(inputs, model, decoder_time)
+            all_outputs.append(output.cpu())
+
+    # Concatenate outputs if needed
+    all_outputs_tensor = torch.cat(all_outputs, dim=0)
+    return all_outputs_tensor
 
 def run_through_nn_at_same_time(inputs: torch.tensor, model: callable) -> torch.tensor:
     encoder_output_data = run_through_encoder(inputs, model.encoder)
