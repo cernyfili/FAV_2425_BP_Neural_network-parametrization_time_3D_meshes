@@ -21,7 +21,7 @@ from utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_ST
 
 
 # region PRIVATE FUNCTIONS
-def tensor_add_time_column(tensor, time : TimeFrame):
+def tensor_add_time_column(tensor, time: TimeFrame):
     device = tensor.device
     time_value = time.value
     # Create a tensor of the same shape as the time feature in the input
@@ -76,6 +76,7 @@ def __select_most_common_time_values(time_value_tensor: torch.Tensor, num_values
     # Return the two most common values
     return top_two_indices
 
+
 #
 # def _get_time_tensor_from_input(inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 #     # Extract the time value column (assuming it's the 4th column)
@@ -100,24 +101,24 @@ def run_through_encoder(inputs, encoder):
     # remove last columen (time_index) from inputs
     inputs_encoder = NNDataset.get_encoder_input(inputs)
 
-
     encoded = encoder(inputs_encoder)
 
     return encoded
 
 
-def run_through_decoder_at_time(encoded_output : torch.tensor, decoder : callable, time : TimeFrame) -> torch.tensor:
+def run_through_decoder_at_time(encoded_output: torch.tensor, decoder: callable, time: TimeFrame) -> torch.tensor:
     decoder_input_data = tensor_add_time_column(encoded_output, time)
     decoder_output = decoder(decoder_input_data)
     return decoder_output
 
 
-def run_through_nn_at_decoder_time(inputs : torch.tensor, model : callable, decoder_time: TimeFrame) -> torch.tensor:
+def run_through_nn_at_decoder_time(inputs: torch.tensor, model: callable, decoder_time: TimeFrame) -> torch.tensor:
     encoder_output_data = run_through_encoder(inputs, model.encoder)
     decoder_output_data = run_through_decoder_at_time(encoder_output_data, model.decoder, decoder_time)
     return decoder_output_data
 
-def run_through_nn_at_same_time(inputs : torch.tensor, model : callable) -> torch.tensor:
+
+def run_through_nn_at_same_time(inputs: torch.tensor, model: callable) -> torch.tensor:
     encoder_output_data = run_through_encoder(inputs, model.encoder)
 
     time_column = NNDataset.get_time_values_column(inputs)
@@ -126,6 +127,7 @@ def run_through_nn_at_same_time(inputs : torch.tensor, model : callable) -> torc
     decoder_output_data = model.decoder(encoder_output_data_with_time)
 
     return decoder_output_data
+
 
 # endregion
 
@@ -192,7 +194,8 @@ def __compute_loss_one_way_chamfer_distance(original_mesh_v: np, original_mesh_f
 
 
 def __compute_loss_chamfer_distance_with_time_tensor(inputs: torch.Tensor, meshes_list: MeshList, model,
-                                                     select_times_function: callable, time_list : list[TimeFrame]) -> list[tensor]:
+                                                     select_times_function: callable, time_list: list[TimeFrame]) -> \
+list[tensor]:
     """
 
     :param decoder_data: tensor 4 columns [x_value, y_value, time_value, time_index]
@@ -201,7 +204,7 @@ def __compute_loss_chamfer_distance_with_time_tensor(inputs: torch.Tensor, meshe
     :param select_times_function:
     :return:
     """
-    time_list_dict = {time.index: time for time in time_list}
+    time_list_dict = {int(time.index): time for time in time_list}
 
     encoded_features = run_through_encoder(inputs, model.encoder)
 
@@ -221,14 +224,16 @@ def __compute_loss_chamfer_distance_with_time_tensor(inputs: torch.Tensor, meshe
     # for each unique time value
     for time_index in time_index_selection:
         # get all rows where 4th column is equal to time_value
-        filtered_encoded_features = encoded_features[time_index_tensor == time_index]
+        time_index_tensor_squeezed = time_index_tensor.squeeze()
+        filtered_encoded_features = encoded_features[time_index_tensor_squeezed == time_index]
 
         meshe = meshes_list.get_mesh_by_time_index(int(time_index))
 
+        decoded_mesh_v = run_through_decoder_at_time(encoded_output=filtered_encoded_features, decoder=model.decoder,
+                                                     time=time_list_dict[int(time_index)])
 
-        decoded_mesh_v = run_through_decoder_at_time(encoded_output=filtered_encoded_features, decoder= model.decoder, time=time_list_dict[time_index])
+        # Compute one-way Chamfer Distance
 
-        # Compute one-way Chamfer Distance loss
         loss_chamfer = __compute_loss_one_way_chamfer_distance(original_mesh_v=meshe.vertices,
                                                                original_mesh_f=meshe.faces,
                                                                decoded_mesh_v=decoded_mesh_v)
@@ -299,6 +304,8 @@ def loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info):
     logging.info(f"Chamfer loss: {loss_chamfer}, Standard loss: {loss_standard}, Combined loss: {combined_loss}")
 
     return combined_loss
+
+
 # endregion
 
 
@@ -349,12 +356,15 @@ def loss_function_uv_streach(inputs, targets, model, loss_info):
     loss_standard = loss_function_standard(inputs, targets, model, loss_info)
 
     return loss_uv_streach + loss_standard
+
+
 # endregion
 
 
 # region LOSS FUNCTION CENTERS
 def __compute_center_distance_loss(input_points: torch.Tensor, decoded_points: torch.Tensor,
-                                   closest_centers_indices_to_points: np.ndarray, centers_points_at_input_time: CentersInfo,
+                                   closest_centers_indices_to_points: np.ndarray,
+                                   centers_points_at_input_time: CentersInfo,
                                    centers_points_at_decoded_time: CentersInfo) -> torch.tensor:
     """
     :param input_points: tensor with 3 columns (x, y, z)
@@ -436,7 +446,7 @@ def __compute_center_distance_loss(input_points: torch.Tensor, decoded_points: t
     return loss
 
 
-def __compute_loss_function_centers(inputs, model, loss_info : LossFunctionInfo) -> list:
+def __compute_loss_function_centers(inputs, model, loss_info: LossFunctionInfo) -> list:
     """
 
     :param inputs: where columns mean (x_value, y_value, z_value, time_value, time_index, point_index)
@@ -486,14 +496,14 @@ def __compute_loss_function_centers(inputs, model, loss_info : LossFunctionInfo)
         # VAR closest_centers_indices - get closest centers to input points
         inputs_points_index_column = NNDataset.get_point_indices_column(inputs_at_time)
         inputs_points_index_column = [int(element) for element in inputs_points_index_column]
-        closest_centers_indices = loss_info.closest_centers_indicies_all_frames[input_time_index][inputs_points_index_column]
+        closest_centers_indices = loss_info.closest_centers_indicies_all_frames[input_time_index][
+            inputs_points_index_column]
 
         # VAR input_centers_info - get all center points from input time
         data_frame_at_input_time = data.get_element_by_time_index(input_time_index)
         centers_points_at_input_time = data_frame_at_input_time.normalized_centers_info
         if not centers_points_at_input_time:
             raise ValueError("Input data must have centers info")
-
 
         loss_distances = __compute_center_distance_loss(input_points=inputs_points, decoded_points=decoded_points,
                                                         closest_centers_indices_to_points=closest_centers_indices,
@@ -514,8 +524,10 @@ def loss_function_centers(inputs, targets, model, loss_info):
 
     loss = loss_centers + loss_standard
 
-    #logging.info(f"Center loss: {loss_centers}, Standard loss: {loss_standard}, Combined loss: {loss}")
+    # logging.info(f"Center loss: {loss_centers}, Standard loss: {loss_standard}, Combined loss: {loss}")
     return loss
+
+
 # endregion
 
 
@@ -525,16 +537,17 @@ class LossFunctionPCAPrepocess():
     def __init__(self):
         pass
 
-    def __compute_loss_pca_preprocess(self, inputs, targets, model, data : SurfacePointsFrameList):
+    def __compute_loss_pca_preprocess(self, inputs, targets, model, data: SurfacePointsFrameList):
         # #compute loss
         # loss = loss_function_standard(inputs, targets, model, loss_info)
         # return loss
         pass
 
     def __call__(self, inputs, targets, model, loss_info):
-        data : SurfacePointsFrameList = loss_info.data_cluster
+        data: SurfacePointsFrameList = loss_info.data_cluster
         loss = self.__compute_loss_pca_preprocess(inputs, targets, model, data)
         return loss
+
 
 # endregion
 
@@ -548,7 +561,8 @@ LOSS_FUNCTIONS_LIST: dict[LossFunctionType: callable] = {
 }
 
 
-def compute_distances_from_point_to_multiple_centers(points: torch.Tensor, closest_centers_points: torch.Tensor) -> torch.Tensor:
+def compute_distances_from_point_to_multiple_centers(points: torch.Tensor,
+                                                     closest_centers_points: torch.Tensor) -> torch.Tensor:
     # region SANITY CHECKS
     if points is None:
         raise AssertionError("Points are empty.")

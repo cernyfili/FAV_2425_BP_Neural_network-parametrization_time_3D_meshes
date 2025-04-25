@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from jsonschema import validate, ValidationError
 
-TEST_MODE = True
+TEST_MODE = False
 
 # Restrict access to only uppercase constants
 def __getattr__(name):
@@ -194,7 +194,7 @@ class FilePathConfig:
     processed_folderpath=None):
         instance = cls()
         
-        current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        current_time_str = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         # Create a folder name based on the current date and time
         timestamped_foldername = f"{data_foldername}_{current_time_str}"
 
@@ -214,10 +214,12 @@ class FilePathConfig:
         instance.raw_data_folderpath = os.path.join(raw_folderpath, data_foldername)
 
         instance.surface_data_filepath = os.path.join(processed_data_folderpath, surface_data_list_filename)
-        instance.session_surface_data_filepath = os.path.join(processed_session_folderpath, surface_data_list_filename)
+        #instance.session_surface_data_filepath = os.path.join(processed_session_folderpath, surface_data_list_filename)
+        instance.session_surface_data_filepath = instance.surface_data_filepath
 
         instance.clustered_data_filepath = os.path.join(processed_data_folderpath, clustered_data_filename)
-        instance.session_clustered_data_filepath = os.path.join(processed_session_folderpath, clustered_data_filename)
+        #instance.session_clustered_data_filepath = os.path.join(processed_session_folderpath, clustered_data_filename)
+        instance.session_clustered_data_filepath = instance.clustered_data_filepath
 
         instance.log_filepath = os.path.join(instance.processed_session_folderpath,
                                          log_file_filename)  # Specify your log file path here

@@ -329,7 +329,8 @@ def process_surface_data(num_surface_points, meshes_folder_path, surface_data_fi
         # copy the file to session folder
         with open(surface_data_filepath, 'rb') as f:
             surface_data_list = pickle.load(f)
-        with open(session_surface_data_filepath, 'wb') as f:
-            pickle.dump(surface_data_list, f)
+        if not os.path.exists(session_surface_data_filepath):
+            with open(session_surface_data_filepath, 'wb') as f:
+                pickle.dump(surface_data_list, f)
 
         logging.info("Neural network data already processed.")

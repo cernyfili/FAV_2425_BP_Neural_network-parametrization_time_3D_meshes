@@ -217,6 +217,25 @@ def evaluate_partial(train_config: TrainConfig):
                                     loaded_models=loaded_models,
                                     mesh_time_index=0)
 
+    save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config, 0)
+
+    #save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list)
+
+def evaluate_partial_2(train_config: TrainConfig):
+    surface_data_list = load_pickle_file(train_config.file_path_config.session_surface_data_filepath)
+
+    if surface_data_list is None or surface_data_list.public_list is None:
+        logging.error("Surface data list could not be loaded. Exiting.")
+        return
+
+    evaluation_folderpath = train_config.file_path_config.evaluation_folderpath
+
+    loaded_models = load_trained_nn_from_files(train_config)
+
+    save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list)
+
+
+
 def evaluate_full(train_config: TrainConfig):
     surface_data_list = load_pickle_file(train_config.file_path_config.session_surface_data_filepath)
 
@@ -288,11 +307,12 @@ def save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_
     visualizer = MeshDataVisualizer(processed_data)
     mesh_files_folderpath = os.path.join(evaluation_folderpath, "mesh_files")
     os.makedirs(mesh_files_folderpath, exist_ok=True)
+    visualizer.save_as_ply_file(mesh_files_folderpath)
     visualizer.save_img_of_meshes(mesh_files_folderpath)
 
 
 def save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list):
-    eval_surface_points_num = 10
+    eval_surface_points_num = 10000
     folder_path = os.path.join(evaluation_folderpath, "metric_centers")
     os.makedirs(folder_path, exist_ok=True)
     folder_path = create_timestemp_dir(folder_path)

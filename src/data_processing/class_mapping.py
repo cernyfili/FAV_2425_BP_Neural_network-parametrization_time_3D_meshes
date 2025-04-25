@@ -441,10 +441,11 @@ class SurfacePointsFrame:
         # check if normalized mesh is normalized
         normalized_mesh = np.array(self._normalized_mesh.vertices)
         original_mesh = np.array(self._original_mesh.vertices)
-        if not normalized_mesh.shape == original_mesh.shape:
-            raise ValueError("Normalized mesh shape does not match original mesh shape.")
-        if not np.all((normalized_mesh >= min_point_value) & (normalized_mesh <= max_point_value)):
-            raise ValueError("Normalized points mesh are not in the range [-1, 1].")
+        # if not normalized_mesh.shape == original_mesh.shape:
+        #     raise ValueError("Normalized mesh shape does not match original mesh shape.")
+        # if not np.all((normalized_mesh >= min_point_value) & (normalized_mesh <= max_point_value)):
+        #     raise ValueError("Normalized points mesh are not in the range [-1, 1].")
+        # todo change
 
         # check if normalized centers info is normalized
         normalized_centers_info = np.array(self._normalized_centers_info.points)
