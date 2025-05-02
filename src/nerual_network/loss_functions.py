@@ -18,7 +18,8 @@ from torch.utils.data import DataLoader
 from data_processing.class_mapping import TimeFrame, MeshList, CentersInfo, SurfacePointsFrame, SurfacePointsFrameList, \
     LossFunctionInfo
 from nerual_network.class_model import NNDataset
-from utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_STD, CDataPreprocessing, LossFunctionType
+from utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_STD, CDataPreprocessing, LossFunctionType, \
+    NN_DEVICE_STR
 
 
 # region PRIVATE FUNCTIONS
@@ -49,19 +50,21 @@ def tensor_add_time_column(tensor, time: TimeFrame):
 #     return random_time_value, int(random_time_index)
 
 
-def __select_unique_time(time_tensor: torch.Tensor) -> torch.Tensor:
+def __select_unique_time(time_index_tensor: torch.Tensor) -> torch.Tensor:
     # get unique time values
-    unique_times = torch.unique(time_tensor)
+    unique_times = torch.unique(time_index_tensor)
+
+    #logging.info(f"Chamfer num times in batch: {len(unique_times)}")
 
     return unique_times
 
 
-def __select_most_common_time_values(time_value_tensor: torch.Tensor, num_values=2) -> torch.Tensor:
+def __select_most_common_times(time_index_tensor: torch.Tensor, num_values=2) -> torch.Tensor:
     # convert all values in tensor to int
-    time_value_tensor = time_value_tensor.int()
+    time_index_tensor = time_index_tensor.int()
 
     # Count occurrences of each value in the tensor
-    counts = torch.bincount(time_value_tensor)
+    counts = torch.bincount(time_index_tensor)
 
     # ratio = 0.5
     # # get number of half of all count of unique values
@@ -108,12 +111,14 @@ def run_through_encoder(inputs, encoder):
 
 def run_through_encoder_evaluation(inputs_all, encoder) -> torch.tensor:
     inputs_dataset = NNDataset.from_tensor(inputs_all)
+    device = torch.device(NN_DEVICE_STR)
 
     dataloader = DataLoader(inputs_dataset, batch_size=32, shuffle=False)
 
     all_outputs = []
     with torch.no_grad():
         for inputs, _ in dataloader:
+            inputs = inputs.to(device)
             output = run_through_encoder(inputs, encoder)
             all_outputs.append(output.cpu())
 
@@ -130,12 +135,13 @@ def run_through_decoder_at_time(encoded_output: torch.tensor, decoder: callable,
 
 def run_through_decoder_at_time_evaluation(encoded_output_all: torch.tensor, decoder: callable, time: TimeFrame) -> torch.tensor:
     inputs_dataset = NNDataset.from_tensor(encoded_output_all)
-
+    device = torch.device(NN_DEVICE_STR)
     dataloader = DataLoader(inputs_dataset, batch_size=32, shuffle=False)
 
     all_outputs = []
     with torch.no_grad():
         for inputs, _ in dataloader:
+            inputs = inputs.to(device)
             output = run_through_decoder_at_time(inputs, decoder, time)
             all_outputs.append(output.cpu())
 
@@ -150,12 +156,14 @@ def run_through_nn_at_decoder_time(inputs: torch.tensor, model: callable, decode
 
 def run_through_nn_at_decoder_time_evaluation(inputs_all: torch.tensor, model: callable, decoder_time: TimeFrame) -> torch.tensor:
     inputs_dataset = NNDataset.from_tensor(inputs_all)
+    device = torch.device(NN_DEVICE_STR)
 
     dataloader = DataLoader(inputs_dataset, batch_size=32, shuffle=False)
 
     all_outputs = []
     with torch.no_grad():
         for inputs, _ in dataloader:
+            inputs = inputs.to(device)
             output = run_through_nn_at_decoder_time(inputs, model, decoder_time)
             all_outputs.append(output.cpu())
 
@@ -254,6 +262,7 @@ list[tensor]:
     encoded_features = run_through_encoder(inputs, model.encoder)
 
     time_index_tensor = NNDataset.get_time_indices_column(inputs)
+    time_index_tensor_squeezed = time_index_tensor.squeeze()
 
     if encoded_features.shape[0] != time_index_tensor.shape[0]:
         raise ValueError("Encoded features and time index tensor must have the same number of rows")
@@ -269,8 +278,8 @@ list[tensor]:
     # for each unique time value
     for time_index in time_index_selection:
         # get all rows where 4th column is equal to time_value
-        time_index_tensor_squeezed = time_index_tensor.squeeze()
-        filtered_encoded_features = encoded_features[time_index_tensor_squeezed == time_index]
+
+        filtered_encoded_features = encoded_features[time_index_tensor_squeezed == int(time_index)]
 
         meshe = meshes_list.get_mesh_by_time_index(int(time_index))
 
@@ -321,12 +330,17 @@ def loss_function_chamfer(inputs, targets, model, loss_info):
 
     combined_loss = loss_chamfer + loss_standard
 
-    logging.info(f"Chamfer loss: {loss_chamfer}, Standard loss: {loss_standard}, Combined loss: {combined_loss}")
+    #logging.info(f"Chamfer loss: {loss_chamfer}, Standard loss: {loss_standard}, Combined loss: {combined_loss}")
 
     return combined_loss
 
 
 def loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info):
+    loss_standard = loss_function_standard(inputs, targets, model, loss_info)
+
+    if len(inputs) == 1:
+        return loss_standard
+
     select_function = __select_unique_time
 
     meshes_list = loss_info.meshes_list
@@ -342,11 +356,9 @@ def loss_function_chamfer_better_random_dist(inputs, targets, model, loss_info):
     # compute avrage of all chamfer distances
     loss_chamfer = torch.stack(loss_chamfer_list).mean()
 
-    loss_standard = loss_function_standard(inputs, targets, model, loss_info)
-
     combined_loss = loss_chamfer + loss_standard
 
-    logging.info(f"Chamfer loss: {loss_chamfer}, Standard loss: {loss_standard}, Combined loss: {combined_loss}")
+    #logging.info(f"Chamfer loss: {loss_chamfer}, Standard loss: {loss_standard}, Combined loss: {combined_loss}")
 
     return combined_loss
 

@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 
 from data_processing.class_mapping import SurfacePointsFrameList, LossFunctionInfo
-from src.nerual_network.class_model import NNDataset
+from src.nerual_network.class_model import NNDataset, TimeGroupedBatchSampler
 from src.utils.helpers import load_pickle_file
 from utils.constants import NN_DEVICE_STR, TrainConfig
 from utils.nn_config_utils import init_training_config
@@ -57,9 +57,15 @@ def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: 
     train_dataset.indices = sorted(train_dataset.indices)
     val_dataset.indices = sorted(val_dataset.indices)
 
-    # Create data loaders for training and validation
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    # ORIGINAL - Create data loaders for training and validation
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    # Custom Sampler for training
+    train_sampler = TimeGroupedBatchSampler(train_dataset, batch_size)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_sampler=train_sampler)
+
 
     return train_loader, val_loader
 
@@ -136,13 +142,15 @@ def _train_nn_for_all_clusters(surface_data_list: SurfacePointsFrameList, train_
     loss_function_info.closest_centers_indicies_all_frames = np.array(all_frames_closest_list, dtype=int)
 
     for cluster in unique_clusters:
+        # if cluster == 1:
+        #     continue
+
+        logging.info(f"--------------------Training neural network for cluster {cluster}...")
         # Filter data for the current cluster
         surface_data_cluster = surface_data_list.filter_by_label(cluster)
 
         # Define a specific filepath for the model weights for this cluster
         model_weights_filepath = model_weights_template.format(cluster=cluster)
-
-        logging.info(f"--------------------Training neural network for cluster {cluster}...")
 
         # Train the neural network on the current cluster's data
         _train_neural_network(data_cluster=surface_data_cluster, model_save_path=model_weights_filepath,

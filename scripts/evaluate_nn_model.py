@@ -17,8 +17,9 @@ raw_folder = "raw"
 
 CONFIG_JSON_FILENAME = "config.json"
 
-data_foldername_list = [("casual_man_1000", "casual_man_1000_20250422_154326_standard"),
-                        ("casual_man_1000", "casual_man_1000_20250418_173451_centers")]
+data_foldername_list = [
+                        #("ball", "_FINAL_chamfer_ball_20250430_153457_324517")
+]
 
 for element in data_foldername_list:
     data_foldername = element[0]
@@ -43,9 +44,11 @@ for element in data_foldername_list:
 
     evaluate_partial(train_config)
 
-data_foldername_list = [("ball", "ball_standard"),
-                        ("ball", "ball_20250417_144502_centers"),("casual_man_1000", "casual_man_1000_20250422_154326_standard"),
-                        ("casual_man_1000", "casual_man_1000_20250418_173451_centers") ]
+data_foldername_list = [
+                        # ("ball", "_FINAL_chamfer_ball_20250430_153457_324517"),
+                        ("casual_man_1000", "_FINAL_casual_man_1000_20250418_173451_centers"),
+                        ("casual_man_1000", "_FINAL_casual_man_1000_20250422_154326_standard")
+                        ]
 
 for element in data_foldername_list:
     data_foldername = element[0]

@@ -210,6 +210,7 @@ class MeshDataVisualizer:
 
 
 def _create_mesh_surfacedatalist(clustered_data : ClusteredCenterPointsAllFrames, surface_data_list : SurfacePointsFrameList) -> SurfacePointsFrameList:
+    logging.info("creating mesh surfacedatalist")
     original_loaded_meshes = surface_data_list.get_original_meshes_list()
 
     mesh_surface_points_frame_list = SurfacePointsFrameList([])
@@ -276,7 +277,7 @@ def process_mesh_through_model(origin_mesh_data: MeshData, loaded_models : Loade
     :return:
     """
 
-
+    logging.info("Processing mesh through model")
 
     # region PREPARE MESH FOR MODEL
 
@@ -305,6 +306,7 @@ def process_mesh_through_model(origin_mesh_data: MeshData, loaded_models : Loade
     #                                                                                "point_clouds_all_times"),
     #                                            time_index=origin_mesh_data.time_index, train_config=train_config)
 
+    logging.info("Denormalizing points")
     denormalized_points_split_by_time_value : ProcessedPointsListSplitByTimeValue = dict()
     for time_index, processed_points_one_time_value in processed_points_split_by_time_value.items():
         denormalized_points = SurfacePointsFrameList.denormalize_points(surface_data_list.normalize_values, processed_points_one_time_value)

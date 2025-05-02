@@ -82,6 +82,7 @@ class NNOutputForVisualization:
 def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
         surface_data_list: SurfacePointsFrameList, time_index: int,
         loaded_models: LoadedModelDic) -> NNOutputForVisualization:
+    logging.info("Running model through one encoder time to all decoder times")
     def __prepare_data_for_visualization(original_points_all: list[torch.tensor],
                                          processed_points_all: list[list[torch.tensor]]) -> NNOutputForVisualization:
         """
@@ -229,7 +230,7 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
     original_points_frame = surface_data_list.get_element_by_time_index(time_index)
 
     original_points_frame_dataset = NNDataset(SurfacePointsFrameList([original_points_frame]))
-    original_points_frame_tensor = torch.tensor(original_points_frame_dataset.data, dtype=torch.float32).to(device)
+    original_points_frame_tensor = torch.tensor(original_points_frame_dataset.data, dtype=torch.float32).to('cpu')
 
     # iterate over clusters
     for cluster_index in unique_clusters:
@@ -267,8 +268,8 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
                                                                 time=time)
             # .cpu().detach().numpy())
 
-            time_index_tensor = torch.full((decoded_output_tensor.shape[0], 1), time.index, device=device)
-            time_value_tensor = torch.full((decoded_output_tensor.shape[0], 1), time.value, device=device)
+            time_index_tensor = torch.full((decoded_output_tensor.shape[0], 1), time.index)
+            time_value_tensor = torch.full((decoded_output_tensor.shape[0], 1), time.value)
 
             # add columns (x,y,z) from decoded_output_tensor and metadata columns from input_tensor_metadata
             decoded_output_tensor_with_metadata = NNDataset.create_tensor(point_columns_tensor=decoded_output_tensor,

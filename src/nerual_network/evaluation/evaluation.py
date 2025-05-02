@@ -212,7 +212,7 @@ def evaluate_partial(train_config: TrainConfig):
 
     save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config, 0)
 
-    save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list)
+    #save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list)
 
 def evaluate_partial_2(train_config: TrainConfig):
     surface_data_list = load_pickle_file(train_config.file_path_config.session_surface_data_filepath)
@@ -296,16 +296,19 @@ def save_centers_pipeline(evaluation_folderpath, surface_data_list):
 
 
 def save_mesh_thrugh_model_pipeline(evaluation_folderpath, loaded_models, train_config, mesh_time_index : int) -> None:
+    logging.info("START: Mesh though model")
     processed_data = process_mesh_through_model_pipeline(MeshData(time_index=mesh_time_index), train_config, loaded_models)
     visualizer = MeshDataVisualizer(processed_data)
     mesh_files_folderpath = os.path.join(evaluation_folderpath, "mesh_files")
     os.makedirs(mesh_files_folderpath, exist_ok=True)
     visualizer.save_as_ply_file(mesh_files_folderpath)
     visualizer.save_img_of_meshes(mesh_files_folderpath)
+    logging.info("END: Mesh though model")
 
 
 def save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_data_list):
     eval_surface_points_num = 10000
+    logging.info(f"START: Metric - Centers for {eval_surface_points_num} points")
     folder_path = os.path.join(evaluation_folderpath, "metric_centers")
     os.makedirs(folder_path, exist_ok=True)
     folder_path = create_timestemp_dir(folder_path)
@@ -313,11 +316,14 @@ def save_metrics_centers_pipeline(evaluation_folderpath, loaded_models, surface_
     compute_save_centers_metrics(
         CentersMetricsInfo(surface_data_list, loaded_models, eval_surface_points_num),
         folder_path)
+    logging.info("END: Metric - Centers")
 
 def save_metric_mesh_shape_pipeline(evaluation_folderpath : str, surface_data_list : SurfacePointsFrameList, train_config : TrainConfig, loaded_models : LoadedModelDic, mesh_time_index : int):
+    logging.info("START: Metric - Mesh shape")
     folderpath = os.path.join(evaluation_folderpath, "metric_mesh_shape")
     os.makedirs(folderpath, exist_ok=True)
     folderpath = create_timestemp_dir(folderpath)
 
     compute_save_mesh_shape_metrics(folderpath, surface_data_list, train_config, loaded_models, mesh_time_index)
+    logging.info("END: Metric - Mesh shape")
 

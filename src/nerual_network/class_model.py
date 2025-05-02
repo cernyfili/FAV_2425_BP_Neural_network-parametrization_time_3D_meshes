@@ -1,5 +1,7 @@
 from enum import Enum
-
+from torch.utils.data import Sampler
+from collections import defaultdict
+import random
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,6 +17,30 @@ def __getattr__(name):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
 
+class TimeGroupedBatchSampler(Sampler):
+    def __init__(self, dataset, batch_size):
+        self.dataset = dataset
+        self.batch_size = batch_size
+
+        # Group indices by time
+        self.time_to_indices = defaultdict(list)
+        for idx in range(len(dataset)):
+            time = dataset[idx][0][4]
+            self.time_to_indices[time].append(idx)
+
+        # Create grouped batches (no shuffle yet)
+        self.batches = []
+        for indices in self.time_to_indices.values():
+            for i in range(0, len(indices), batch_size):
+                self.batches.append(indices[i:i+batch_size])
+
+    def __iter__(self):
+        random.shuffle(self.batches)
+        for batch in self.batches:
+            yield batch
+
+    def __len__(self):
+        return len(self.batches)
 
 class NNDataset(Dataset):
     def __init__(self, surface_data_list: SurfacePointsFrameList):
@@ -62,8 +88,8 @@ class NNDataset(Dataset):
 
     def __getitem__(self, idx):
         # Separate data based on the target and input requirements
-        targets = self.data[idx, :3]  # First 3 columns as targets
         inputs = self.data[idx]  # All columns as inputsis
+        targets = self.data[idx, :3]  # First 3 columns as targets
         return inputs, targets
 
 
@@ -180,7 +206,7 @@ class NNDataset(Dataset):
             torch.Tensor: A tensor containing the selected random values.
         """
         if num_values > input_tensor.size(0):
-            raise ValueError("num_values must be less than or equal to the size of the input tensor.")
+            return input_tensor
 
         indices = torch.randperm(input_tensor.size(0))[:num_values]
         return input_tensor[indices]

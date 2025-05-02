@@ -57,26 +57,33 @@ def main():
         #     num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS,
         #     time_steps=CDataPreprocessing.MAX_TIME_STEPS),
         # chamfer2
+        # TrainConfig(
+        #     nn_config=NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patience, nn_batch_size=64,
+        #                        nn_model=ModelType.SIMPLE_MLP_04, nn_lr=nn_lr,
+        #                        loss_function_type=LossFunctionType.CHAMFER2),
+        #     file_path_config=FilePathConfig.create_test_mode(data_foldername="ball"),
+        #     num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS,
+        #     time_steps=CDataPreprocessing.MAX_TIME_STEPS),
         TrainConfig(
-            nn_config=NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patience, nn_batch_size=nn_batch_size,
-                               nn_model=ModelType.SIMPLE_MLP_02, nn_lr=nn_lr,
+            nn_config=NNConfig(nn_max_epochs=25, nn_patience=3, nn_batch_size=128,
+                               nn_model=ModelType.SIMPLE_MLP_04, nn_lr=nn_lr,
                                loss_function_type=LossFunctionType.CHAMFER2),
-            file_path_config=FilePathConfig.create_test_mode(data_foldername="casual_man_1000",
-                                                             processed_session_folderpath=os.path.join(
-                                                                 processed_man_folderpath, "casual_chamfer")),
+            file_path_config=FilePathConfig.create_test_mode(data_foldername="casual_man_1000"),
             num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS,
             time_steps=CDataPreprocessing.MAX_TIME_STEPS),
 
+
+
         # uv streach
-        TrainConfig(
-            nn_config=NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patience, nn_batch_size=nn_batch_size,
-                               nn_model=ModelType.SIMPLE_MLP_03, nn_lr=nn_lr,
-                               loss_function_type=LossFunctionType.UV_STREACH),
-            file_path_config=FilePathConfig.create_test_mode(data_foldername="casual_man_1000",
-                                                             processed_session_folderpath=os.path.join(
-                                                                 processed_man_folderpath, "casual_uvstreach")),
-            num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS,
-            time_steps=CDataPreprocessing.MAX_TIME_STEPS),
+        # TrainConfig(
+        #     nn_config=NNConfig(nn_max_epochs=nn_max_epochs, nn_patience=nn_patience, nn_batch_size=nn_batch_size,
+        #                        nn_model=ModelType.SIMPLE_MLP_03, nn_lr=nn_lr,
+        #                        loss_function_type=LossFunctionType.UV_STREACH),
+        #     file_path_config=FilePathConfig.create_test_mode(data_foldername="casual_man_1000",
+        #                                                      processed_session_folderpath=os.path.join(
+        #                                                          processed_man_folderpath, "casual_uvstreach")),
+        #     num_clusters=CDataPreprocessing.NUM_CLUSTERS, num_surface_points=CDataPreprocessing.NUM_SURFACE_POINTS,
+        #     time_steps=CDataPreprocessing.MAX_TIME_STEPS),
 
     ]
 

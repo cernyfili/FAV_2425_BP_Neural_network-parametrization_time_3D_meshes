@@ -79,7 +79,6 @@ def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: Loaded
     :return:
     """
     logging.info(f"START: computing centers metrics for points: {num_points}")
-    device = torch.device(NN_DEVICE_STR)
     clusteres_indexes_unique = data.get_unique_clusters_indexes()
 
     time_list = data.get_time_list()
@@ -91,13 +90,16 @@ def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: Loaded
     centers_metrics_data_list = []
 
     for cluster_index in clusteres_indexes_unique:
+        logging.info(f"computing centers metrics - cluster index {str(cluster_index)}/{len(clusteres_indexes_unique)}")
         data_filtered_cluster = data.filter_by_label(cluster_index)
         model = loaded_models[ClusterIndex(cluster_index)]
 
         dataset = NNDataset(data_filtered_cluster)
-        input_tensor = torch.tensor(dataset.data, dtype=torch.float32).to(device)
+        input_tensor = torch.tensor(dataset.data, dtype=torch.float32).to('cpu')
 
         for time in time_list:
+            logging.info(
+                f"computing centers metrics - INPUT time index {str(time.index)}/{len(time_list)}")
             time_index = time.index
 
             # filter by time index
@@ -108,7 +110,7 @@ def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: Loaded
             # CLOSEST CENTERS INDICES
             closest_centers_indices_tensor = _get_closes_centers_indices_by_points_and_time_index(closest_centers_matrix,
                                                                                                   filtered_input_tensor,
-                                                                                                  time, 1).to(device)
+                                                                                                  time, 1)
 
             # INPUT POINTS
             inputs_points = NNDataset.get_points_columns(filtered_input_tensor)
@@ -116,20 +118,23 @@ def compute_centers_metrics2(data: SurfacePointsFrameList, loaded_models: Loaded
             # CENTERS POINTS at input_time
             centers_point_inputs_time = _get_centers_points_by_time_and_closestcentersindicies(data,
                                                                                                closest_centers_indices_tensor,
-                                                                                               time).to(device)
+                                                                                               time)
 
             # DISTANCE at input time - input_points and center_points
             distances_input_time = torch.norm(inputs_points - centers_point_inputs_time, dim=1)
 
             all_distance_differences = []  # To store differences between input and decoded distances
             for decoder_time in time_list:
+                logging.info(
+                    f"computing centers metrics - decoded time index {str(decoder_time.index)}/{len(time_list)}")
+
                 # DECODED POINTS
                 processed_points = run_through_nn_at_decoder_time_evaluation(inputs_all=filtered_input_tensor, model=model, decoder_time=decoder_time)
 
                 # CENTERS POINTS at decoded_time
                 centers_point_decoded_time = _get_centers_points_by_time_and_closestcentersindicies(data,
                                                                                                     closest_centers_indices_tensor,
-                                                                                                    decoder_time).to(device)
+                                                                                                    decoder_time)
 
                 # DISTANCE at decoded time - processed_points and center_points
                 distances_decoded_time = torch.norm(processed_points - centers_point_decoded_time, dim=1)
@@ -207,6 +212,7 @@ def compute_save_centers_metrics(centers_metrics_info: CentersMetricsInfo, folde
     min_per_point_tensor = None
     max_per_point_tensor = None
     mean_per_point_tensor = None
+    logging.info("computing across metrics")
     for time_index, centers_metrics_element in centers_metrics_data_list.items():
         logging.info(f"Time index: {time_index}")
         for element in centers_metrics_element:

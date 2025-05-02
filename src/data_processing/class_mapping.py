@@ -1,3 +1,4 @@
+import logging
 from copy import deepcopy
 from dataclasses import dataclass
 
@@ -818,6 +819,7 @@ class SurfacePointsFrameList:
         return np.array(denormalized_points)
 
     def normalize_labeled_points_by_values(self, normalize_values : NormalizeValues):
+        logging.info("Normalizing")
         if self.is_normalized:
             raise ValueError("Data is already normalized.")
         if normalize_values is None:
