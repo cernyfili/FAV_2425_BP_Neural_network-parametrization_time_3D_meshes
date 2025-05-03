@@ -18,12 +18,12 @@ import torch
 from torch import nn
 from trimesh import Trimesh
 
-from data_processing.class_mapping import SurfacePointsFrameList
-from nerual_network.class_model import NNDataset
-from nerual_network.loss_functions import run_through_encoder, run_through_decoder_at_time, \
+from src.data_processing.class_mapping import SurfacePointsFrameList
+from src.nerual_network.class_model import NNDataset
+from src.nerual_network.loss_functions import run_through_encoder, run_through_decoder_at_time, \
     run_through_encoder_evaluation, run_through_decoder_at_time_evaluation
-from utils.constants import TrainConfig, NN_DEVICE_STR, ModelType
-from utils.nn_config_utils import init_training_config, init_model
+from src.utils.constants import TrainConfig, NN_DEVICE_STR, ModelType
+from src.utils.nn_config_utils import init_training_config, init_model
 
 RGBColorArray: TypeAlias = np.ndarray
 ProcessedPointsListSplitByTimeValue: TypeAlias = dict[int, np.ndarray]
@@ -68,15 +68,6 @@ class CentersMetricsInfo:
 class NNOutputForVisualization:
     rgb_colors: RGBColorArray
     processed_points: ProcessedPointsListSplitByTimeValue
-
-
-#
-# def get_closest_centers_indices(closest_centers_indicies_all_frames : np.ndarray, inputs : torch.tensor, input_time_index : int) -> np.ndarray:
-#     inputs_points_index_column = NNDataset.get_point_indices_column(inputs)
-#     inputs_points_index_column = [int(element) for element in inputs_points_index_column]
-#     closest_centers_indices = closest_centers_indicies_all_frames[input_time_index][inputs_points_index_column]
-#
-#     return closest_centers_indices
 
 
 def _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization(
@@ -247,18 +238,6 @@ def _run_model_decoder_all_times_with_selected_encoder_time(surface_data_list: S
         original_points_all.append(input_tensor)  # You can store the numpy array directly
 
         encoded_features = run_through_encoder_evaluation(inputs_all=input_tensor, encoder=model.encoder)
-        # encoded_features = []
-        #
-        # # Step 1: Encode the original data
-        # with torch.no_grad():  # No need to calculate gradients during evaluation
-        #     for inputs in original_points_loader:
-        #         inputs = inputs[0].float().to(device)
-        #         encoder_input_data = NNDataset.get_encoder_input(inputs)
-        #         encoded_features_element = model.encoder(encoder_input_data)
-        #         encoded_features.append(encoded_features_element)
-        #
-        # # Process the original points through the model
-        # encoded_features = torch.cat(encoded_features).to(device)
 
         processed_points_one_cluster = []
         # Step 2: Decode in all times
@@ -342,10 +321,28 @@ def _load_trained_model(model_weights_filepath: str, train_config: TrainConfig):
     return model
 
 
-def load_trained_nn_from_files(train_config: TrainConfig) -> LoadedModelDic:
+def load_trained_nn_from_files_code(train_config: TrainConfig) -> LoadedModelDic:
     logging.info(
         f"START: loading nn from model weights files {train_config.file_path_config.model_weights_folderpath_template}")
-    loaded_models = MeshFilepathsDic()
+    loaded_models = LoadedModelDic()
+    num_clusters = train_config.num_clusters
+    model_type = train_config.nn_config.model_type
+    model_weights_template = train_config.file_path_config.model_weights_folderpath_template
+    for i in range(num_clusters):
+        cluster_index = ClusterIndex(i + 1)
+        filepath = model_weights_template.format(cluster=cluster_index)
+
+        loaded_model = load_trained_nn_from_file(filepath, model_type)
+        loaded_models[cluster_index] = loaded_model
+
+    logging.info(
+        f"END: loading nn from model weights files")
+    return loaded_models
+
+def load_trained_nn_from_files_cmd(train_config: TrainConfig) -> LoadedModelDic:
+    logging.info(
+        f"START: loading nn from model weights files {train_config.file_path_config.model_weights_folderpath_template}")
+    loaded_models = LoadedModelDic()
     num_clusters = train_config.num_clusters
     model_type = train_config.nn_config.model_type
     model_weights_template = train_config.file_path_config.model_weights_folderpath_template

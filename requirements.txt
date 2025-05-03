@@ -1,7 +1,7 @@
 pandas
 matplotlib~=3.6.3
 opencv-python
-trimesh~=4.5.2
+trimesh~=4.6.8
 numpy~=1.26.4
 
 igl
@@ -11,3 +11,4 @@ sckit-learn
 jsonschema~=4.10.3
 torch~=2.5.1
 scikit-learn~=1.6.0
+typer~=0.15.3

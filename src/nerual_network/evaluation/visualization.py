@@ -9,19 +9,19 @@ Description:
 """
 import logging
 import os
-from datetime import time, datetime
+from datetime import datetime
 
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
 
-from data_processing.class_mapping import SurfacePointsFrameList
-from nerual_network.class_model import NNDataset
-from nerual_network.helpers import MeshFilepathsDic, NNOutputForVisualization, \
+from src.data_processing.class_mapping import SurfacePointsFrameList
+from src.nerual_network.class_model import NNDataset
+from src.nerual_network.helpers import NNOutputForVisualization, \
     _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization, VisualizationData, \
     create_timestemp_dir, LoadedModelDic
-from nerual_network.loss_functions import run_through_nn_at_same_time
-from utils.constants import NN_DEVICE_STR
+from src.nerual_network.loss_functions import run_through_nn_at_same_time
+from src.utils.constants import NN_DEVICE_STR
 
 
 def _save_pointcloud_to_file(original_points_all, processed_points_all, original_filepath, processed_filepath):

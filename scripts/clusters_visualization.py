@@ -3,7 +3,7 @@ import os
 import numpy as np
 from matplotlib import pyplot as plt
 
-from utils.helpers import load_pickle_file
+from src.utils.helpers import load_pickle_file
 
 CLUSTERS_FILEPATH = 'data/clusters.csv'
 ORIGINAL_POINTCLOUD_FILEPATH = 'data/pointcloud.csv'

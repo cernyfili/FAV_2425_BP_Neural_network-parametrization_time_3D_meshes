@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from jsonschema import validate, ValidationError
 
-TEST_MODE = False
+TEST_MODE = True
 
 # Restrict access to only uppercase constants
 def __getattr__(name):
@@ -73,6 +73,7 @@ center_metric_eval = "center_metric_eval"
 center_metric_variances = "center_metric_variances"
 mesh_shape_metrics = "mesh_shape_metrics.txt"
 evaluation_folder_name = "evaluation"
+CONFIG_JSON_FILENAME = "config.json"
 
 current_absolutepath = os.path.dirname(os.path.abspath(__file__))
 data_absolutepath = os.path.join(current_absolutepath, "..", "..", "data")

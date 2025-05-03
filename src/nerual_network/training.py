@@ -7,11 +7,12 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Subset, DataLoader
 
-from data_processing.class_mapping import SurfacePointsFrameList, LossFunctionInfo
+from src.data_processing.class_mapping import SurfacePointsFrameList, LossFunctionInfo
 from src.nerual_network.class_model import NNDataset, TimeGroupedBatchSampler
 from src.utils.helpers import load_pickle_file
-from utils.constants import NN_DEVICE_STR, TrainConfig
-from utils.nn_config_utils import init_training_config
+from src.utils.constants import NN_DEVICE_STR, TrainConfig
+from src.utils.nn_config_utils import init_training_config
+from utils.constants import LossFunctionType
 
 
 # Restrict access to underscore-prefixed functions
@@ -22,27 +23,27 @@ def __getattr__(name):
 
 
 # region PRIVATE FUNCTIONS
-#
-# # Function to split data and create data loaders
-# def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
-#     # Create an instance of SurfaceDataset using the provided surface_data_list
-#     dataset = NNDataset(surface_data_list)
-#
-#     # Split indices for training and validation
-#     train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
-#
-#     # Create subsets for training and validation
-#     train_dataset = Subset(dataset, train_indices)
-#     val_dataset = Subset(dataset, val_indices)
-#
-#     # Create data loaders for training and validation
-#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-#
-#     return train_loader, val_loader
 
 # Function to split data and create data loaders
 def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
+    # Create an instance of SurfaceDataset using the provided surface_data_list
+    dataset = NNDataset(surface_data_list)
+
+    # Split indices for training and validation
+    train_indices, val_indices = train_test_split(range(len(dataset)), test_size=0.2, random_state=42)
+
+    # Create subsets for training and validation
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset = Subset(dataset, val_indices)
+
+    # Create data loaders for training and validation
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    return train_loader, val_loader
+
+# Function to split data and create data loaders
+def _create_data_loaders_chamfer(surface_data_list: SurfacePointsFrameList, batch_size: int):
     # Create an instance of SurfaceDataset using the provided surface_data_list
     dataset = NNDataset(surface_data_list)
 
@@ -68,31 +69,6 @@ def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: 
 
 
     return train_loader, val_loader
-
-
-#
-# def _create_data_loaders(surface_data_list: SurfacePointsFrameList, batch_size: int):
-#     # Create an instance of SurfaceDataset using the provided surface_data_list
-#     dataset = NNDataset(surface_data_list)
-#
-#     # Split indices for training and validation
-#     split_idx = int(0.8 * len(dataset))
-#     train_indices = list(range(split_idx))  # First 80%
-#     val_indices = list(range(split_idx, len(dataset)))  # Last 20%
-#
-#     # Create subsets for training and validation
-#     train_dataset = Subset(dataset, train_indices)
-#     val_dataset = Subset(dataset, val_indices)
-#
-#     # Sort each subset by the time index column
-#     train_dataset.indices = sorted(train_dataset.indices)
-#     val_dataset.indices = sorted(val_dataset.indices)
-#
-#     # Create data loaders for training and validation
-#     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
-#     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-#
-#     return train_loader, val_loader
 
 
 # Function to evaluate the model on the validation set
@@ -170,7 +146,10 @@ def _train_neural_network(data_cluster: SurfacePointsFrameList, model_save_path,
     # if not data.is_normalized:
     #     logging.warning("Data is not normalized. Neural network training may not be effective.")
 
-    train_loader, val_loader = _create_data_loaders(data_cluster, batch_size)
+    if train_config.nn_config.loss_function_type == LossFunctionType.CHAMFER2 or train_config.nn_config.loss_function_type == LossFunctionType.CHAMFER:
+        train_loader, val_loader = _create_data_loaders_chamfer(data_cluster, batch_size)
+    else:
+        train_loader, val_loader = _create_data_loaders(data_cluster, batch_size)
 
     model, optimizer, loss_function = init_training_config(train_config)
 

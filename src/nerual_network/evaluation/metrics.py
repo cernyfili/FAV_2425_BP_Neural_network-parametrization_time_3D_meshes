@@ -19,33 +19,16 @@ from itertools import groupby
 import numpy as np
 import torch
 
-from data_processing.class_clustering import ClusteredCenterPointsAllFrames
-from data_processing.class_mapping import SurfacePointsFrameList, TimeFrame
-from nerual_network.class_model import NNDataset
-from nerual_network.evaluation.meshes import process_mesh_through_model, MeshDataVisualizer
-from nerual_network.helpers import MeshFilepathsDic, ClusterIndex, CentersMetricsInfo, \
+from src.data_processing.class_clustering import ClusteredCenterPointsAllFrames
+from src.data_processing.class_mapping import SurfacePointsFrameList, TimeFrame
+from src.nerual_network.class_model import NNDataset
+from src.nerual_network.evaluation.meshes import process_mesh_through_model, MeshDataVisualizer
+from src.nerual_network.helpers import MeshFilepathsDic, ClusterIndex, CentersMetricsInfo, \
     FilePath, CenterMetricsElement, MetroMetrics, TimeIndex, LoadedModelDic, MeshData
-from nerual_network.loss_functions import run_through_nn_at_decoder_time, run_through_nn_at_decoder_time_evaluation
-from utils.constants import NN_DEVICE_STR, TrainConfig
-from utils.helpers import load_pickle_file
+from src.nerual_network.loss_functions import run_through_nn_at_decoder_time, run_through_nn_at_decoder_time_evaluation
+from src.utils.constants import NN_DEVICE_STR, TrainConfig
+from src.utils.helpers import load_pickle_file
 
-
-#
-# def _compute_variance(evaluation_results_list):
-#     variance_list = []
-#     for evaluation_result in evaluation_results_list._list:
-#         variance_list_list = []
-#         for decoder_element in evaluation_result.decoder_pair_list._list:
-#             unique_ids = decoder_element.pair_processed_center.get_unique_ids()
-#             for id in unique_ids:
-#                 pair_list = decoder_element.pair_processed_center.get_decoder_element_by_id(id)
-#                 distances = [pair.distance for pair in pair_list]
-#                 # compute statistical dispersion
-#                 variance = np.var(distances)
-#                 variance_list_list.append({"variance": variance, "id": id})
-#         variance_list.append({"time": evaluation_result.encoder_time, "variance_list": variance_list_list})
-#
-#     return variance_list
 
 # region CENTERS METRICS
 
@@ -250,131 +233,7 @@ def compute_save_centers_metrics(centers_metrics_info: CentersMetricsInfo, folde
 # endregion
 
 # region CENTERS MASH SHAPE
-# def _compute_mesh_shape_metrics(surface_data_list: SurfacePointsFrameList, train_config: TrainConfig,
-#                                 clustered_data: ClusteredCenterPointsAllFrames, nn_lr):
-#     """
-#     Computes metrics which:
-#     1. loads mesh in one specified time
-#     2. runs these mesh points through the encoder in specified time
-#     3. runs output through the decoder in all times
-#     4. compares the output of an time with a mesh in the same time
-#     :param surface_data_list:
-#     :param train_config:
-#     :return:
-#     """
-#
-#     def compute_laplacian_eigenvalues(mesh, k=10):
-#         """
-#         Compute the first k eigenvalues of the Laplace-Beltrami operator for a mesh.
-#
-#         Args:
-#             mesh (trimesh.Trimesh): Trimesh mesh object.
-#             k (int): Number of smallest eigenvalues to compute.
-#
-#         Returns:
-#             np.ndarray: Sorted eigenvalues.
-#         """
-#         # Get the adjacency matrix of the mesh
-#         adjacency_matrix = mesh.vertex_adjacency_matrix
-#
-#         # Compute the Laplacian matrix
-#         laplacian = csgraph.laplacian(adjacency_matrix, normed=True)
-#
-#         # Compute the smallest k eigenvalues of the Laplacian matrix
-#         eigenvalues, _ = eigsh(laplacian, k=k, which='SM')
-#         return np.sort(eigenvalues)
-#
-#     def compute_similarity(original_mesh, processed_mesh):
-#         # Compute eigenvalues
-#         eigenvalues1 = compute_laplacian_eigenvalues(original_mesh)
-#         eigenvalues2 = compute_laplacian_eigenvalues(processed_mesh)
-#         # Compare eigenvalues (e.g., L2 distance)
-#         return np.linalg.norm(eigenvalues1 - eigenvalues2)
-#
-#     def label_points_by_clustered_data(surface_data_list: SurfacePointsFrameList,
-#                                        clustered_data: ClusteredCenterPointsAllFrames):
-#         raise NotImplementedError("Not implemented yet")
-#         #
-#         # final_surface_data_list = SurfacePointsFrameList([])
-#         #
-#         # for i, surface_data_frame in enumerate(surface_data_list.list):
-#         #     mesh_points = surface_data_frame.points_list
-#         #     centers_points_frame = clustered_data.points_allframes[i]
-#         #     centers_labels_frame = clustered_data.labels_frame
-#         #     # check indexes with filepath names
-#         #
-#         #     surface_labels = categorize_points_with_labels(centers_labels_frame, centers_points_frame, mesh_points)
-#         #     # append both values to list with names in the list
-#         #     final_surface_data_list.append(SurfacePointsFrame(mesh_points, surface_labels, None))
-#         # return final_surface_data_list
-#
-#     mesh_folder_path = train_config.file_path_config.raw_data_folderpath
-#     loaded_meshes_list = _get_loaded_meshes_list(mesh_folder_path)
-#
-#     all_vertices = []
-#     for mesh in loaded_meshes_list:
-#         # Access vertices as a NumPy array
-#         vertices = mesh.vertices
-#         all_vertices.append(vertices)
-#
-#     mesh_points_allframes: SurfacePointsFrameList = _convert_to_surfacepointsframelist(all_vertices)
-#     mesh_points_allframes = label_points_by_clustered_data(mesh_points_allframes, clustered_data)
-#
-#     mesh_points_allframes.assign_time_to_all_elements()
-#     mesh_points_allframes.normalize_all_elements()
-#
-#     time = 0
-#     # todo is not working - change
-#     original_points_all, processed_points_all, cluster_labels = _run_model_decoder_all_times_with_selected_encoder_time(
-#         surface_data_list=mesh_points_allframes, time_index=time, loaded_models=LoadedModelDic)
-#
-#     if len(loaded_meshes_list) != len(surface_data_list.public_list) and len(mesh_points_allframes.public_list) != len(
-#             surface_data_list.public_list):
-#         raise Exception("Not same number of loaded meshes and surface data")
-#
-#     similarity_list = []
-#     # compare the output of the decoder with the mesh in the same time
-#     for i, surface_data_frame in enumerate(surface_data_list.public_list):
-#         if surface_data_frame.time.index != i:
-#             raise Exception("Not same time")
-#         time = surface_data_frame.time.value
-#
-#         loaded_mesh_timeframe = loaded_meshes_list[i]
-#
-#         mesh_points_timeframe = mesh_points_allframes.public_list[i]
-#         if mesh_points_timeframe.time.index != i:
-#             raise Exception("Not same time")
-#         mesh_points_timeframe_points = mesh_points_timeframe.normalized_points_list
-#
-#         processed_points_timeframe = processed_points_all[processed_points_all[:, 3] == time]
-#
-#         # convert to meshes
-#         original_mesh = trimesh.Trimesh(vertices=mesh_points_timeframe_points, faces=loaded_mesh_timeframe.faces)
-#         processed_mesh = trimesh.Trimesh(vertices=processed_points_timeframe, faces=loaded_mesh_timeframe.faces)
-#
-#         similarity = compute_similarity(original_mesh, processed_mesh)
-#         similarity_list.append({"time": time, "similarity": similarity})
-#
-#     return similarity_list
-#
-#
-# def _convert_to_surfacepointsframelist(all_vertices):
-#     raise NotImplementedError("Not implemented yet")
-#     # # transform mesh vertices to  and normalize them and add time
-#     # mesh_points_list = SurfacePointsFrameList([])
-#     # for vertices in all_vertices:
-#     #     mesh_points = SurfacePointsFrame(vertices)
-#     #     mesh_points_list.append(mesh_points)
-#     # return mesh_points_list
-#
-#
-# def _get_loaded_meshes_list(meshes_folder_path: str):
-#     meshes_filepaths_list = get_meshes_list(meshes_folder_path)
-#     loaded_meshes_list = []
-#     for mesh_filepath in meshes_filepaths_list:
-#         mesh = trimesh.load(mesh_filepath)
-#         loaded_meshes_list.append(mesh)
-#     return loaded_meshes_list
+
 
 def _run_metro(mesh1_path, mesh2_path, metro_path="metro.exe"):
     logging.info(f"Running metro.exe with {mesh1_path} and {mesh2_path}")

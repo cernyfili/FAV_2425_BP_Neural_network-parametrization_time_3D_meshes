@@ -7,27 +7,25 @@ Created: 17.04.2025
 Version: 1.0
 Description: 
 """
-import copy
 import logging
 import os
 from typing import TypeAlias
+
 import numpy as np
 import trimesh
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from trimesh import Trimesh
 
-from data_processing.class_clustering import ClusteredCenterPointsAllFrames
-from data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame, TimeFrame
-from data_processing.mapping import categorize_points_with_labels
-
-from nerual_network.helpers import ProcessedMeshData, MeshData, MeshFilepathsDic, \
+from src.data_processing.class_clustering import ClusteredCenterPointsAllFrames
+from src.data_processing.class_mapping import SurfacePointsFrameList, SurfacePointsFrame, TimeFrame
+from src.data_processing.mapping import categorize_points_with_labels
+from src.nerual_network.helpers import ProcessedMeshData, MeshData, MeshFilepathsDic, \
     _run_model_with_one_encoder_time_to_all_decoder_times_prepare_for_visualization, \
     ProcessedPointsListSplitByTimeValue, NNOutputForVisualization, create_timestemp_dir, FilePath, TimeIndex, \
     LoadedModelDic
-from utils.constants import TrainConfig
-from utils.helpers import load_pickle_file
-
+from src.utils.constants import TrainConfig
+from src.utils.helpers import load_pickle_file
 
 TriMeshDict : TypeAlias = dict[TimeIndex, Trimesh]
 
@@ -79,6 +77,7 @@ class MeshDataVisualizer:
 
     def save_as_obj_file(self, save_folderpath: str) -> MeshFilepathsDic:
         trimesh_dict = self._get_trimesh_dict()
+        save_folderpath = create_timestemp_dir(save_folderpath)
 
         filepaths_dict = MeshFilepathsDic()
         for time_index, mesh in trimesh_dict.items():
@@ -165,48 +164,6 @@ class MeshDataVisualizer:
             plt.savefig(processed_points_filepath, format='png', dpi=300)
             plt.close()
             logging.info(f"Saved processed points to {processed_points_filepath}")
-
-    # def save_img_of_meshes_with_ply(self, save_folderpath: str):
-    #     trimesh_dict = self._get_trimesh_dict()
-    #
-    #     # make dir if not made
-    #     save_folderpath = create_timestemp_dir(save_folderpath)
-    #
-    #     for time_index, mesh in trimesh_dict.items():
-    #         processed_points_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.ply')
-    #         img_filepath = os.path.join(save_folderpath, f'processed_points_{time_index}.png')
-    #
-    #         mesh.export(processed_points_filepath)
-    #         logging.info(f"Saved processed points to {processed_points_filepath}")
-    #
-    #         mesh = o3d.io.read_triangle_mesh(processed_points_filepath)
-    #         if not mesh.has_vertex_normals():
-    #             mesh.compute_vertex_normals()
-    #
-    #         # Set up the offscreen renderer
-    #         width, height = 1024, 768
-    #         renderer = o3d.visualization.rendering.OffscreenRenderer(width, height)
-    #
-    #         # Set background color (white RGBA)
-    #         renderer.scene.set_background([1.0, 1.0, 1.0, 1.0])
-    #
-    #         # Set up material
-    #         material = o3d.visualization.rendering.MaterialRecord()
-    #         material.shader = "defaultLit"
-    #
-    #         # Add mesh to scene
-    #         renderer.scene.add_geometry("mesh", mesh, material)
-    #
-    #         # Center the camera on the mesh
-    #         bbox = mesh.get_axis_aligned_bounding_box()
-    #         renderer.setup_camera(60.0, bbox, bbox.get_center())
-    #
-    #         # Render to image
-    #         image = renderer.render_to_image()
-    #
-    #         # Save the image
-    #         o3d.io.write_image(img_filepath, image)
-    #         print("Saved image to rendered_mesh.png")
 
 
 def _create_mesh_surfacedatalist(clustered_data : ClusteredCenterPointsAllFrames, surface_data_list : SurfacePointsFrameList) -> SurfacePointsFrameList:

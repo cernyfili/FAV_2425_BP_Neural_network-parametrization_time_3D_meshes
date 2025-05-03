@@ -2,9 +2,10 @@ import logging
 import os
 import sys
 
-from main import preprocess_data
-from nerual_network.evaluation.evaluation import evaluate, evaluate_partial, evaluate_partial_2
-from utils.constants import FilePathConfig, DEFAULT_TRAIN_CONFIG, ModelType, LossFunctionType, TrainConfig
+from src.utils.cmd_app import preprocess_data
+from src.nerual_network.evaluation.evaluation import evaluate, evaluate_partial, evaluate_partial_2
+from src.utils.constants import FilePathConfig, DEFAULT_TRAIN_CONFIG, ModelType, LossFunctionType, TrainConfig, \
+    CONFIG_JSON_FILENAME
 
 # "C:\Users\RDClient\Documents\GitHub\FAV_BP_24_25_Parametrization\data\processed\ball\ball_20241210"
 # init logger just to console
@@ -14,8 +15,6 @@ logging.basicConfig(level=logging.INFO)
 data_folder = "data"
 processed_folder = "processed"
 raw_folder = "raw"
-
-CONFIG_JSON_FILENAME = "config.json"
 
 data_foldername_list = [
                         #("ball", "_FINAL_chamfer_ball_20250430_153457_324517")

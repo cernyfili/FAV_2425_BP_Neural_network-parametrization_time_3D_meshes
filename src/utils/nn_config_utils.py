@@ -10,10 +10,9 @@ Description:
 
 from torch import optim, nn
 
-from nerual_network.class_model import Simple_MLP_04, Simple_MLP_01, Simple_MLP_02
-from nerual_network.loss_functions import LOSS_FUNCTIONS_LIST
-from nerual_network.class_model import MODELS_LIST
-from utils.constants import TrainConfig, ModelType
+from src.nerual_network.class_model import MODELS_LIST
+from src.nerual_network.loss_functions import LOSS_FUNCTIONS_LIST
+from src.utils.constants import TrainConfig, ModelType
 
 
 # Configuration function to initialize model, optimizer, and criterion

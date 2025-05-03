@@ -10,7 +10,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from trimesh import Trimesh
 
-from utils.constants import CDataPreprocessing
+from src.utils.constants import CDataPreprocessing
 
 
 @dataclass
@@ -649,66 +649,13 @@ class SurfacePointsFrame:
 
         return new_surface_points_frame
 
-    # def _compute_closest_centers_to_points(self):
-    #     surface_points = self.normalized_points_list
-    #     surface_points = np.array(surface_points)
-    #
-    #     closest_centers_to_points = None
-    #     if self.normalized_centers_info is not None:
-    #         closest_centers_to_points = SurfacePointsFrame.compute_closest_centers(points=surface_points, centers_info=self.normalized_centers_info)
-    #
-    #     if self.normalized_labeled_points_list is None:
-    #         raise ValueError("Labeled points list is empty.")
-    #
-    #     if len(self.normalized_labeled_points_list.list) != len(closest_centers_to_points):
-    #         raise ValueError("Number of points must match the number of closest centers.")
-    #
-    #     # set closest centers to labeled points
-    #     for i, labeled_point in enumerate(self.normalized_labeled_points_list.list):
-    #         labeled_point.closest_centers = closest_centers_to_points[i]
 
 
     # function which represents object in debug value view
     def __repr__(self):
         return f"SurfacePointsFrame(labeled_points_list={self._normalized_labeled_points_list}, time={self.time})"
 
-# def find_closest_centers(points: torch.Tensor, centers_points: torch.Tensor, num_closest_centers : int, kdtree : KDTree ) -> torch.Tensor:
-#     """
-#
-#     :param points:
-#     :param centers_points:
-#     :return:
-#      distance_tensor: tensor of distances in a row so the size is "len(points) * num_closest_points"
-#      centers_points_tensor: tensor of closest centers points to points in a row so the size is "len(points) * num_closest_points"
-#     """
-#     # region SANITY CHECKS
-#     if points is None:
-#         raise AssertionError("Points are empty.")
-#     # check if points elements shape is (x,y,z) and it is float numbers
-#     if points.shape[1] != 3:
-#         raise AssertionError("Points must have 3 coordinates.")
-#
-#     if centers_points is None:
-#         raise AssertionError("Centers points are empty.")
-#     # check if centers_points elements shape is (x,y,z) and it is float numbers
-#     if centers_points.shape[1] != 3:
-#         raise AssertionError("Centers points must have 3 coordinates.")
-#
-#     if kdtree is None:
-#         raise AssertionError("KDTree is empty.")
-#     # endregion
-#
-#     # region LOGIC
-#
-#
-#     # Find num_closest_centers closest centers to each point
-#     points_np = points.cpu().detach().numpy()
-#     _, indices = kdtree.query(points_np, k=num_closest_centers)
-#
-#     # select centers points
-#     selected_centers_points = centers_points[indices]
-#
-#     return selected_centers_points
+
 
 @dataclass
 class NormalizeValues:

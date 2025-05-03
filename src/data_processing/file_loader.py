@@ -3,10 +3,9 @@ import logging
 import os
 
 import numpy as np
-from sklearn.cluster import DBSCAN
 
-from utils.constants import CDataPreprocessing
-from utils.helpers import get_file_index_from_filename
+from src.utils.constants import CDataPreprocessing
+from src.utils.helpers import get_file_index_from_filename
 
 
 # Restrict access to underscore-prefixed functions
@@ -14,26 +13,6 @@ def __getattr__(name):
     if name.startswith("_"):
         raise AttributeError(f"{name} is a private function and cannot be imported.")
     raise AttributeError(f"Module has no attribute {name}")
-
-# Function to compute Euclidean distance between two 3D points
-# def _euclidean_distance(p1, p2):
-#     from math import sqrt
-#     return sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2 + (p1[2] - p2[2]) ** 2)
-
-
-
-#
-# # Function for DBSCAN clustering using precomputed distances
-# def _dbscan_clustering_from_precomputed_distances(distances, eps=0.5, min_samples=5):
-#     # Extract the upper triangle of the matrix (if needed) or use the distances directly
-#     # distances = distances[np.triu_indices(distances.shape[0], k=1)]  # If necessary
-#
-#     # Perform DBSCAN clustering with the precomputed distance matrix
-#     db = DBSCAN(eps=eps, min_samples=min_samples, metric='precomputed')
-#     labels = db.fit_predict(distances)
-#
-#     return labels
-#
 
 
 # Function to load .xyz files

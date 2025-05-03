@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 from scipy.cluster.hierarchy import fcluster, linkage
 
-from data_processing.class_clustering import ClusteredCenterPointsAllFrames
+from src.data_processing.class_clustering import ClusteredCenterPointsAllFrames
 from src.data_processing.file_loader import load_centers_files
 
 

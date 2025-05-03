@@ -10,9 +10,9 @@ Description:
 import logging
 import os
 
-from nerual_network.evaluation.meshes import MeshDataVisualizer, process_mesh_through_model_pipeline
-from nerual_network.helpers import load_trained_nn_from_files, MeshData
-from utils.constants import FilePathConfig, DEFAULT_TRAIN_CONFIG
+from src.nerual_network.evaluation.meshes import MeshDataVisualizer, process_mesh_through_model_pipeline
+from src.nerual_network.helpers import load_trained_nn_from_files_code, MeshData
+from src.utils.constants import FilePathConfig, DEFAULT_TRAIN_CONFIG
 
 DATA_FOLDERNAME: str = 'ball_test'
 SESSION_FOLDERNAME: str = "ball_test_20250309_234312"
@@ -53,7 +53,7 @@ def main():
 
     #mesh_filepath = os.path.join(train_config.file_path_config.raw_data_folderpath, MESH_FILENAME)
 
-    loaded_models = load_trained_nn_from_files(train_config)
+    loaded_models = load_trained_nn_from_files_code(train_config)
 
     processed_data = process_mesh_through_model_pipeline(MeshData(time_index=MESH_TIME_INDEX), train_config, loaded_models)
 

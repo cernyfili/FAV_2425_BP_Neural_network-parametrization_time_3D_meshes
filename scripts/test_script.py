@@ -10,7 +10,7 @@ Description:
 import json
 
 from scripts.evaluate_nn_model import TRAIN_CONFIG
-from utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig
+from src.utils.constants import DEFAULT_TRAIN_CONFIG, TrainConfig, FilePathConfig
 
 #data = DEFAULT_TRAIN_CONFIG.to_dict()
 

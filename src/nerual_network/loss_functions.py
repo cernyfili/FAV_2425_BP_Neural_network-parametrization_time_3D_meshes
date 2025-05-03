@@ -7,7 +7,6 @@ Created: 17.03.2025
 Version: 1.0
 Description: 
 """
-import logging
 
 import igl
 import numpy as np
@@ -15,10 +14,11 @@ import torch
 from torch import nn, tensor
 from torch.utils.data import DataLoader
 
-from data_processing.class_mapping import TimeFrame, MeshList, CentersInfo, SurfacePointsFrame, SurfacePointsFrameList, \
+from src.data_processing.class_mapping import TimeFrame, MeshList, CentersInfo, SurfacePointsFrameList, \
     LossFunctionInfo
-from nerual_network.class_model import NNDataset
-from utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_STD, CDataPreprocessing, LossFunctionType, \
+from src.nerual_network.class_model import NNDataset
+from src.utils.constants import LOSS_FUNC_NORMAL_DIST_MEAN, LOSS_FUNC_NORMAL_DIST_STD, CDataPreprocessing, \
+    LossFunctionType, \
     NN_DEVICE_STR
 
 
@@ -32,22 +32,6 @@ def tensor_add_time_column(tensor, time: TimeFrame):
     tensor_with_time = torch.cat((tensor, time_tensor), dim=1)
     return tensor_with_time
 
-
-# def __get_random_time(inputs: torch.Tensor) -> tuple[float, int]:
-#     # Extract the time value column (assuming it's the 4th column)
-#     time_value_column = inputs[:, 3]
-#
-#     # Extract the time index column (assuming it's the 5th column)
-#     time_index_column = inputs[:, 4]
-#
-#     # Select a random index
-#     random_index = torch.randint(0, time_value_column.size(0), (1,)).item()
-#
-#     # Retrieve the time value and time index at the selected index
-#     random_time_value = time_value_column[random_index].item()
-#     random_time_index = time_index_column[random_index].item()
-#
-#     return random_time_value, int(random_time_index)
 
 
 def __select_unique_time(time_index_tensor: torch.Tensor) -> torch.Tensor:
@@ -80,25 +64,6 @@ def __select_most_common_times(time_index_tensor: torch.Tensor, num_values=2) ->
     # Return the two most common values
     return top_two_indices
 
-
-#
-# def _get_time_tensor_from_input(inputs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-#     # Extract the time value column (assuming it's the 4th column)
-#     time_value_column = inputs[:, 3]
-#
-#     # Extract the time index column (assuming it's the 5th column)
-#     time_index_column = inputs[:, 4]
-#
-#     # generate tensor of with 2 columns where you randomly select time values from time_value_column and add corresponding time_index
-#     # random_index = torch.randint(0, time_value_column.size(0), (1,)).item()
-#     # random_time_value_tensor = time_value_column[random_index]
-#     #
-#     # # Retrieve the time value and time index at the selected index
-#     # random_time_index_tensor = time_index_column[random_index]
-#     time_value_tensor = time_value_column
-#     time_index_tensor = time_index_column
-#
-#     return time_value_tensor, time_index_tensor
 
 
 def run_through_encoder(inputs, encoder):
@@ -511,20 +476,6 @@ def __compute_loss_function_centers(inputs, model, loss_info: LossFunctionInfo) 
     :param loss_info:
     :return:
     """
-
-    # region INLINE FUNCTIONS
-
-    # def get_closest_centers_indicies(data_at_input_time : SurfacePointsFrame, inputs_points_index_column : list[int]):
-    #
-    #     input_all_labeled_points = data_at_input_time.normalized_labeled_points_list
-    #     filtered_input_labeled_points = input_all_labeled_points.filter_by_points_indices(inputs_points_index_column)
-    #
-    #     closest_centers_points_list = filtered_input_labeled_points.get_closest_centers()
-    #     closest_centers_indices = [element.get_centers_indices() for element in closest_centers_points_list]
-    #     """ indexes of closest centers to input_points """
-    #     if len(closest_centers_indices) != len(inputs_points_index_column):
-    #         raise ValueError("Length of closest_centers_indices and input_points must be the same")
-    #     return closest_centers_indices
 
     data: SurfacePointsFrameList = loss_info.data
     time_list = loss_info.time_list  # list of TimeFrame
