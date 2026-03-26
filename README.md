@@ -7,6 +7,9 @@ Toto je projekt vytvořený v rámci bakalářské práce FAV ZČU na téma: Par
 - jejich vyhodnocení,
 - a vizualizaci výsledků.
 
+Více informací v textu bakalářské práce [Parametrizace časově proměnlivých sítí](https://github.com/cernyfili/FAV_2425_BP_Neural_network-parametrization_time_3D_meshes/blob/master/FAV_BP_25_Parametrization_TVM_Filip_Cerny.pdf)
+- obsahuje - Uživatelská příručka 
+
 ## Spuštění
 
 Aplikace se spouští skriptem:
